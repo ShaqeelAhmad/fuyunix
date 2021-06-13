@@ -2,24 +2,12 @@ Local multiplayer support
 
 Joystick/Gamepad support
 
-SDL already works on windows. Just need to make sure the file pahts are set
-appropriately
-
 A menu system when <Esc> is pressed
-
-
-There's still potential of reducing memory usage
-Only load assets when required
-Make fair tradeoff of cpu usage and memory usage
 
 Handle the quit sequence better
 
-Note to self:
-Think about alternate ways to accomplish something
+Let the user configure the keys:
 
-What to let user configure: ???
-
-What to save in file: ???
-
+Save file in XDG_DATA_HOME or HOME/.local/share
 
 Add make install & make uninstall
