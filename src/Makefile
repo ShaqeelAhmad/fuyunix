@@ -21,7 +21,7 @@ install:
 	cp -f fuyunix ${DESTDIR}${PREFIX}/bin
 	chmod 755 ${DESTDIR}${PREFIX}/bin/fuyunix
 	mkdir -p ${DESTDIR}${MANPREFIX}/man6
-	cp -f fuyunix.6 ${DESTDIR}${MANPREFIX}/man6/fuyunix.6
+	cp -f ../man/fuyunix.6 ${DESTDIR}${MANPREFIX}/man6/fuyunix.6
 	chmod 644 ${DESTDIR}${MANPREFIX}/man6/fuyunix.6
 
 uninstall:
