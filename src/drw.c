@@ -34,12 +34,12 @@ cleanup(void)
 void
 drwmenu(void)
 {
-	fprintf(stderr, "%d\n", game.dm.w);
+	/* fprintf(stderr, "%d\n", game.dm.w); */
 }
 
 void 
 drw(void)
 {
-	fprintf(stderr, "%s\n", resourcepath);
+	/* fprintf(stderr, "%s\n", resourcepath); */
 
 }
