@@ -13,7 +13,4 @@ struct Game {
 	SDL_DisplayMode dm;
 };
 
-/* Global struct */
-static struct Game game;
-
 #endif
