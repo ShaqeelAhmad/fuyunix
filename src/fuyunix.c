@@ -22,11 +22,11 @@ run(void)
 		while (SDL_PollEvent(&event) != 0) {
 			if (event.type == SDL_QUIT)
 				quit = true;
-			else if (event.type == SDL_KEYDOWN) {
+			else if (event.type == SDL_KEYDOWN)
 				quit = handleKeys(&event.key);
-			}
-			drw();
+
 		}
+		drw();
 	}
 
 }

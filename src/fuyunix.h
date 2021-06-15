@@ -10,7 +10,12 @@ struct Game {
 	SDL_Window *win;
 	SDL_Renderer *rnd;
 
+	SDL_Surface *surf;
+
 	SDL_DisplayMode dm;
+
+	int h;
+	int w;
 };
 
 #endif
