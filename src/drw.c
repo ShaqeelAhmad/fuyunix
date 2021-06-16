@@ -1,11 +1,25 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <SDL2/SDL.h>
+
 #include "fuyunix.h"
 
-/* Global struct */
+/* structs */
+struct Game {
+	SDL_Window *win;
+	SDL_Renderer *rnd;
+
+	SDL_Surface *surf;
+
+	SDL_DisplayMode dm;
+
+	int h;
+	int w;
+};
+
 static struct Game game;
 
+/* Function definitions */
 void
 init(void)
 {
@@ -60,5 +74,4 @@ drw(void)
 	SDL_GetWindowSize(game.win, &game.w, &game.h);
 
 	SDL_UpdateWindowSurface(game.win);
-
 }

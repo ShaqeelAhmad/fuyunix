@@ -7,11 +7,11 @@
 #include <SDL2/SDL.h>
 
 #include "drw.h"
+#include "fuyunix.h"
 
 SDL_KeyboardEvent *keyevent;
 
 /* Function declarations */
-void quitloop(void);
 void left(void);
 void right(void);
 void down(void);
@@ -24,21 +24,13 @@ struct Key {
 
 /* Default keys */
 static const struct Key key[] = {
-	{SDLK_a,         quitloop},
+	{SDLK_q,         quitloop},
 	{SDLK_h,             left},
 	{SDLK_j,             down},
 	{SDLK_k,             jump},
 	{SDLK_l,            right},
 	{SDLK_ESCAPE,     drwmenu},
 };
-
-bool running;
-
-void
-quitloop(void)
-{
-	running = false;
-}
 
 void
 left(void)
@@ -72,14 +64,10 @@ loopkeys(void)
 	}
 }
 
-bool
+void
 handleKeys(void *ptr)
 {
 	keyevent = ptr;
 
-	running = true;
-
 	loopkeys();
-
-	return !running;
 }
