@@ -1,7 +1,9 @@
+#define _POSIX_C_SOURCE 2
 #include <stdio.h>
 #include <stdlib.h>
 #include <SDL2/SDL.h>
 #include <stdbool.h>
+#include <unistd.h>
 
 #include "keys.h"
 #include "fuyunix.h"
@@ -10,21 +12,28 @@
 /* structs */
 
 /* Function declarations */
+static bool quit = false;
 
 /* Function definitions */
-void 
+
+/* Other parts of program will call quitloop to exit the game */
+void
+quitloop(void)
+{
+	quit = true;
+}
+
+void
 run(void)
 {
 	SDL_Event event;
-	bool quit = false;
 
 	while (!quit) {
 		while (SDL_PollEvent(&event) != 0) {
 			if (event.type == SDL_QUIT)
-				quit = true;
+				quitloop();
 			else if (event.type == SDL_KEYDOWN)
-				quit = handleKeys(&event.key);
-
+				handleKeys(&event.key);
 		}
 		drw();
 	}
@@ -34,19 +43,18 @@ run(void)
 int
 main(int argc, char *argv[])
 {
-	int i = 0;
-	while (argc > 1 && i < argc) {
-		if (strcmp(argv[i], "-v") == 0) {
-			puts(VERSION);
+	int x;
+
+	while ((x = getopt(argc, argv, "v")) != -1) {
+		if (x == 'v') {
+			puts("Fuyunix: "VERSION);
 			return EXIT_SUCCESS;
+		} else {
+			fputs("Usage: fuyunix [-v]\n"
+					"Run fuyunix without any arguments to start the game\n",
+					stderr);
+			return EXIT_FAILURE;
 		}
-		i++;
-	}
-	if (argc > 1) {
-		fputs("Usage: fuyunix [-v]\n"
-				"Run fuyunix without any arguments to start the game\n",
-				stderr);
-		return EXIT_FAILURE;
 	}
 
 	init();
