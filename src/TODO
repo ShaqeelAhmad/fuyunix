@@ -6,8 +6,6 @@ A menu system when <Esc> is pressed
 
 Handle the quit sequence better
 
-Let the user configure the keys:
-
 Save file in XDG_DATA_HOME or HOME/.local/share
 
-Add make install & make uninstall
+Add multithreading support (multiple processes run at once)
