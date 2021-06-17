@@ -1,6 +1,6 @@
 CC = gcc
 SRC = fuyunix.c keys.c drw.c
-OBJ = ${SRC:.c=.o}
+OBJ = $(SRC:.c=.o)
 
 DIR = /usr/local
 
@@ -10,13 +10,13 @@ LDFLAGS = `sdl2-config --cflags --libs` -lSDL2_image
 all: fuyunix
 
 .c.o:
-	${CC} -c ${CFLAGS} $<
+	$(CC) -c $(CFLAGS) $<
 
-fuyunix: ${OBJ}
-	${CC} -o $@ ${OBJ} ${LDFLAGS} ${CFLAGS}
+fuyunix: $(OBJ)
+	$(CC) -o $@ $(OBJ) $(LDFLAGS) $(CFLAGS)
 
 clean:
-	rm -f fuyunix ${OBJ}
+	$(RM) fuyunix $(OBJ)
 
 install: all
 	mkdir -p $(DIR)/bin
@@ -24,6 +24,6 @@ install: all
 	chmod 755 $(DIR)/bin/fuyunix
 
 uninstall:
-	rm -f ${DESTDIR}${PREFIX}/bin/fuyunix
+	$(RM) $(DIR)/bin/fuyunix
 
 .PHONY: clean install uninstall
