@@ -1,14 +1,11 @@
-/* 
- * This file is only meant for keys and functions that get executed by the
- * keys. The functions may be from other files such as drw.c
-*/
-#include <stdio.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <SDL2/SDL.h>
 
 #include "drw.h"
 #include "fuyunix.h"
 
+/* Global variables */
 SDL_KeyboardEvent *keyevent;
 
 /* Function declarations */
