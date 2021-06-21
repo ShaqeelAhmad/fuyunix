@@ -1,4 +1,4 @@
-void drwmenu(void);
+void drwmenu(int player);
 void init(void);
 void cleanup(void);
 void drw(void);

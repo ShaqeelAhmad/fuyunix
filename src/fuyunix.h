@@ -6,6 +6,6 @@
 
 static const char resourcepath[] = "/usr/local/games/fuyunix/";
 
-void quitloop(void);
+void quitloop(int player);
 
 #endif

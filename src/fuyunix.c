@@ -114,9 +114,10 @@ writeSaveFile(void)
 
 /* Other parts of program will call quitloop to exit the game */
 void
-quitloop(void)
+quitloop(int player)
 {
-	quit = true;
+	if (player == 0)
+		quit = true;
 }
 
 void
@@ -129,7 +130,7 @@ run(void)
 	while (!quit) {
 		while (SDL_PollEvent(&event) != 0) {
 			if (event.type == SDL_QUIT)
-				quitloop();
+				quitloop(0);
 			else if (event.type == SDL_KEYDOWN)
 				handleKeys(&event.key);
 		}
