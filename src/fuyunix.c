@@ -116,8 +116,7 @@ writeSaveFile(void)
 void
 quitloop(int player)
 {
-	if (player == 0)
-		quit = true;
+	quit = true;
 }
 
 void

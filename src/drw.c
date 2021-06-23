@@ -49,9 +49,6 @@ cleanup(void)
 void
 drwmenu(int player)
 {
-	if (player != 0)
-		return;
-
 	int x = 20;
 	int y = 20;
 	int width = game.w - x * 2;

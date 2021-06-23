@@ -4,7 +4,7 @@ OBJ = $(SRC:.c=.o)
 
 DIR = /usr/local
 
-CFLAGS = -Wall -Werror -pedantic -Wextra -std=c99
+CFLAGS = -Wall -Werror -pedantic -Wextra -std=c99 -Wno-unused-parameter
 LDFLAGS = `sdl2-config --cflags --libs` -lSDL2_image
 
 all: fuyunix
