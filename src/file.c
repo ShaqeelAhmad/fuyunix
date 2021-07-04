@@ -19,29 +19,39 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
+#include <errno.h>
+#include <sys/stat.h>
+
+/* XDG_STATE_HOME is better suited for save files but it's rather new and
+ * not everyone knows about it */
+#define XDG_STATE_HOME "XDG_STATE_HOME"
+#define XDG_CONFIG_HOME "XDG_CONFIG_HOME"
 
 static int level = 0;
 
-static char *xdgstatehome;
-static char *xdgconfighome;
+void
+handleComments(FILE *fp)
+{
+	while (fgetc(fp) == '#') {
+		while (fgetc(fp) != '\n');
+	}
+}
 
 char *
-getSavePath(void)
+getPath(char *xdgdir, char *file, char *altdir)
 {
 	char *path;
 	char *str;
 	char *dir = "/fuyunix";
-	char *file = "/save";
 
-	/* XDG_STATE_HOME is better suited for save files but it's rather new and
-	 * not everyone knows about it */
-	path = getenv("XDG_STATE_HOME");
+	path = getenv(xdgdir);
 	if (path == NULL) {
 		path = getenv("HOME");
 		if (path == NULL)
 			fprintf(stderr, "HOME is not set\n");
 
-		dir = "/.fuyunix";
+		dir = altdir;
 	}
 
 	char *dirpath;
@@ -65,20 +75,12 @@ getSavePath(void)
 }
 
 void
-handleComments(FILE *fp)
-{
-	while (fgetc(fp) == '#') {
-		while (fgetc(fp) != '\n');
-	}
-}
-
-void
 readSaveFile(void)
 {
 	char *savepath;
 	FILE *fp;
 
-	savepath  = getSavePath();
+	savepath  = getPath(XDG_STATE_HOME, "/save", "/.local/state/fuyunix");
 
 	fp = fopen(savepath, "r");
 
@@ -104,7 +106,7 @@ writeSaveFile(void)
 	char *savepath;
 	FILE *fp;
 
-	savepath  = getSavePath();
+	savepath  = getPath(XDG_STATE_HOME, "/save", "/.local/state/fuyunix");
 
 	fp = fopen(savepath, "w+");
 	if (fp == NULL) {
@@ -113,10 +115,8 @@ writeSaveFile(void)
 		return;
 	}
 
-	fprintf(fp, "# This file should not be edited by the user\n"
-			"# Do not change the order of the variables"
-			"(Only the values are parsed)\n"
-			"# Comments only work on the top of file\n");
+	fprintf(fp, "# This file should not be edited manually\n"
+			"# Also  comments only work on the top of file\n");
 
 	fprintf(fp, "Level %d\n", level);
 

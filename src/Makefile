@@ -1,5 +1,5 @@
 CC = gcc
-SRC = fuyunix.c keys.c drw.c
+SRC = fuyunix.c keys.c drw.c file.c
 OBJ = $(SRC:.c=.o)
 
 DIR = /usr/local

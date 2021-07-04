@@ -45,8 +45,8 @@ quitloop(int player)
 void
 run(void)
 {
-	/* readSaveFile(); */
-
+	readSaveFile();
+	
 	SDL_Event event;
 
 	while (!quit) {
@@ -59,7 +59,7 @@ run(void)
 		drw();
 	}
 
-	/* writeSaveFile(); */
+	writeSaveFile();
 }
 
 int
