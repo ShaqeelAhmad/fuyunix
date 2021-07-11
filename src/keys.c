@@ -19,10 +19,11 @@
 
 #include <stdbool.h>
 #include <stdio.h>
-#include <SDL2/SDL.h>
+#include <SDL.h>
 
 #include "drw.h"
 #include "fuyunix.h"
+#include "file.h"
 
 /* Global variables */
 SDL_KeyboardEvent *keyevent;
@@ -33,11 +34,47 @@ void right(int player);
 void down(int player);
 void jump(int player);
 
+struct List list[] = {
+	{0, "quitloop",      "Q"},
+	{0, "left",          "H"},
+	{0, "drawmenu", "Escape"},
+};
+
+/*
+struct Funcname {
+	void (*func)(int);
+	char *name;
+};
+
+static struct Funcname funcname[] = {
+	{quitloop,   "quitloop"},
+	{drwmenu,    "drawmenu"},
+	{left,      "move-left"},
+	{down,     "move-down?"},
+	{jump,           "jump"},
+	{right,    "move-right"},
+};
+*/
+
 struct Key {
 	SDL_Keycode key;
 	void (*func)(int);
 	int player;
 };
+
+/*
+struct value {
+	char *name;
+	int player;
+	char *funcname;
+	void (*func)(int);
+};
+
+if (strcmp(value.name, foo.funcname) == 0) {
+	value.func = foo.func;
+}
+
+*/
 
 /* Default keys */
 static const struct Key key[] = {
@@ -56,6 +93,12 @@ static const struct Key key[] = {
 	{SDLK_w,             jump,     1},
 	{SDLK_d,            right,     1},
 };
+
+void
+saveKeys()
+{
+	writeKeysFile(list, sizeof(list) / sizeof(list[0]));
+}
 
 void
 left(int player)
