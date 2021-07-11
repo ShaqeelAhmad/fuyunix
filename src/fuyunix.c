@@ -17,19 +17,23 @@
  *  along with fuyunix.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+/* I don't think this is how I should do this */
 #define _POSIX_C_SOURCE 2
+
 #include <errno.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
-#include <SDL2/SDL.h>
+#include <SDL.h>
 #include <unistd.h>
 
 #include "drw.h"
 #include "keys.h"
 #include "fuyunix.h"
 #include "file.h"
+
+/* TODO Add support for joystick / gamepad */
 
 /* global variables */
 static bool quit = false;
@@ -45,7 +49,7 @@ quitloop(int player)
 void
 run(void)
 {
-	readSaveFile();
+	int level = readSaveFile();
 	
 	SDL_Event event;
 
@@ -59,7 +63,8 @@ run(void)
 		drw();
 	}
 
-	writeSaveFile();
+	writeSaveFile(level);
+	saveKeys();
 }
 
 int
