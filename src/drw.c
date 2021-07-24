@@ -88,8 +88,7 @@ drwmenu(int player)
 	};
 
 	SDL_FillRect(game.surf, &menu,
-			SDL_MapRGB(game.surf->format, 20, 150, 180)
-			);
+			SDL_MapRGB(game.surf->format, 20, 150, 180));
 
 	SDL_RenderPresent(game.rnd);
 }
@@ -97,8 +96,9 @@ drwmenu(int player)
 void
 drw(void)
 {
-	game.surf = SDL_GetWindowSurface(game.win);
 	SDL_GetWindowSize(game.win, &game.w, &game.h);
+	game.surf = SDL_GetWindowSurface(game.win);
+
 
 	SDL_UpdateWindowSurface(game.win);
 }

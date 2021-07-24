@@ -6,5 +6,3 @@ struct List {
 	char *funcname;
 	char *key;
 };
-
-void writeKeysFile(struct List *list, int lim);

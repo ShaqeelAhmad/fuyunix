@@ -33,8 +33,6 @@
 #include "fuyunix.h"
 #include "file.h"
 
-/* TODO Add support for joystick / gamepad */
-
 /* global variables */
 static bool quit = false;
 
@@ -50,7 +48,7 @@ void
 run(void)
 {
 	int level = readSaveFile();
-	
+
 	SDL_Event event;
 
 	while (!quit) {
@@ -64,7 +62,6 @@ run(void)
 	}
 
 	writeSaveFile(level);
-	saveKeys();
 }
 
 int
