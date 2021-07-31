@@ -23,17 +23,12 @@ for more players but I can't confirm it.
 prints the version number
 .SH ENVIRONMENT VARIABLES
 .TP
-.B XDG_CONFIG_HOME
-For configuration files
-.TP
 .B XDG_STATE_HOME
 Is used for save states
 .SH FILES
 .TP
-.I $XDG_CONFIG_HOME/fuyunix/keys
-Keybindings for the game
-.TP
 .I $XDG_STATE_HOME/fuyunix/save
 Game save state
 .P
-If the enviroment variables are not set $HOME/.fuyunix/ will be created instead
+If the enviroment variables are not set the files will go to the default
+values.($XDG_STATE_HOME at $HOME/.local/state)
