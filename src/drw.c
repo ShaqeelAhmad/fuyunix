@@ -42,11 +42,104 @@ struct Game {
 
 	int h;
 	int w;
+	int numplayers;
 };
 
 static struct Game game;
 
+void drw(void);
+
 /* Function definitions */
+/* TODO Draw text */
+void
+homeMenu(void)
+{
+	SDL_Event event;
+
+	/* Poll events to get the right resolution */
+	SDL_PollEvent(&event);
+
+	SDL_GetWindowSize(game.win, &game.w, &game.h);
+	game.surf = SDL_GetWindowSurface(game.win);
+
+	int focus = 0;
+	bool notquit = true;
+
+	/* height of choices */
+	int ch;
+	int oldheight = 0;
+	int diff = 30;
+
+selection_loop:
+	while (notquit) {
+		while (SDL_PollEvent(&event) != 0) {
+			if (event.type == SDL_QUIT) {
+				notquit = false;
+				quitloop(0);
+				return;
+			} else if (event.type == SDL_KEYDOWN) {
+				switch (event.key.keysym.sym) {
+					case SDLK_k:
+						if (focus > 0)
+							focus -= 1;
+						break;
+					case SDLK_j:
+						if (focus < 2)
+							focus += 1;
+						break;
+					case SDLK_q:
+						notquit = false;
+						quitloop(0);
+						break;
+					case SDLK_RETURN:
+						/* printf("%d\n", focus); */
+						goto selection;
+						break;
+				}
+			}
+		}
+
+		/* TODO add game name on top part of screen */
+
+		SDL_GetWindowSize(game.win, &game.w, &game.h);
+		game.surf = SDL_GetWindowSurface(game.win);
+
+		if (game.h != oldheight) {
+			ch = game.h >> 2;
+			oldheight = game.h;
+		}
+
+		SDL_Rect options[3] = {
+			{diff, diff + ch, game.w - diff * 2, ch - diff * 2},
+			{diff, diff + (ch << 1), game.w - diff * 2, ch - diff * 2},
+			{diff, diff + (ch << 1) + ch, game.w - diff * 2, ch - diff * 2},
+		};
+
+		SDL_FillRects(game.surf, options, 3,
+				SDL_MapRGB(game.surf->format, 20, 150, 180));
+		SDL_FillRect(game.surf, &options[focus],
+				SDL_MapRGB(game.surf->format, 20, 190, 180));
+
+		SDL_RenderPresent(game.rnd);
+
+		SDL_UpdateWindowSurface(game.win);
+	}
+selection:
+	switch (focus) {
+	case 0:
+		printf("Start Game\n");
+		break;
+	case 1:
+		printf("Choose players\n");
+		goto selection_loop;
+		break;
+	case 2:
+		printf("Exit\n");
+		quitloop(0);
+		break;
+	}
+}
+
 void
 init(void)
 {
@@ -67,6 +160,7 @@ init(void)
 void
 cleanup(void)
 {
+	/* TODO Possibly write savefile here */
 	SDL_DestroyRenderer(game.rnd);
 	SDL_DestroyWindow(game.win);
 
@@ -99,6 +193,8 @@ drw(void)
 	SDL_GetWindowSize(game.win, &game.w, &game.h);
 	game.surf = SDL_GetWindowSurface(game.win);
 
+	/* printf("%d\n", game.w); */
+	/* printf("%d\n", game.h); */
 
 	SDL_UpdateWindowSurface(game.win);
 }
