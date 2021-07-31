@@ -23,10 +23,13 @@
 #include <errno.h>
 #include <sys/stat.h>
 
-/* XDG_STATE_HOME is better suited for save files but it's rather new and
- * not everyone knows about it */
+/*
+ * XDG_STATE_HOME is better suited for save files but it's rather new and
+ * not everyone knows about it
+ */
 #define SAVEPATH "XDG_STATE_HOME"
 
+/* Only handles continuous comments. I use it only at the top of file */
 void
 handleComments(FILE *fp)
 {
@@ -39,7 +42,7 @@ char *
 getPath(char *xdgdir, char *file, char *altdir)
 {
 	char *path;
-	char *str;
+	char *fullpath;
 	char *dir = "/fuyunix";
 
 	path = getenv(xdgdir);
@@ -62,13 +65,13 @@ getPath(char *xdgdir, char *file, char *altdir)
 			perror("Unable to create save directory\n");
 
 	size = size + strlen(file);
-	str = malloc(size);
+	fullpath = malloc(size);
 
-	snprintf(str, size + 1, "%s%s", dirpath, file);
+	snprintf(fullpath, size + 1, "%s%s", dirpath, file);
 
 	free(dirpath);
 
-	return str;
+	return fullpath;
 }
 
 /* Only reads level number for now */
@@ -100,12 +103,15 @@ readSaveFile(void)
 	return level;
 }
 
-/* Note: If you're writing a "real" game, you probably want to encrypt the
+/*
+ * Note: If you're writing a "real" game, you probably want to encrypt the
  * save files in some way to avoid people cheating in the game
  */
 void
 writeSaveFile(int level)
 {
+	char *comment = "#This file should not be edited manually\n"
+					"# Also I only handle comments on the top of file";
 	char *savepath;
 	FILE *fp;
 
@@ -118,8 +124,7 @@ writeSaveFile(int level)
 		return;
 	}
 
-	fprintf(fp, "# This file should not be edited manually\n"
-			"# Also  comments only work on the top of file\n");
+	fprintf(fp, "%s\n", comment);
 
 	fprintf(fp, "Level %d\n", level);
 
