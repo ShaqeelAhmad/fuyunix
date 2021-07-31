@@ -47,7 +47,10 @@ quitloop(int player)
 void
 run(void)
 {
+
 	int level = readSaveFile();
+
+	homeMenu();
 
 	SDL_Event event;
 
