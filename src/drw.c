@@ -68,6 +68,9 @@ homeMenu(void)
 	/* height of choices */
 	int ch;
 	int oldheight = 0;
+	int oldwidth = 0;
+	int winwidth;
+	int winheight;
 	int diff = 30;
 
 selection_loop:
@@ -90,7 +93,7 @@ selection_loop:
 					case SDLK_q:
 						notquit = false;
 						quitloop(0);
-						break;
+						return;
 					case SDLK_RETURN:
 						/* printf("%d\n", focus); */
 						goto selection;
@@ -107,12 +110,17 @@ selection_loop:
 		if (game.h != oldheight) {
 			ch = game.h >> 2;
 			oldheight = game.h;
+			winheight = ch - (diff << 1);
+		}
+		if (game.w != oldwidth) {
+			winwidth = game.w - (diff << 1);
+			oldwidth = game.w;
 		}
 
 		SDL_Rect options[3] = {
-			{diff, diff + ch, game.w - diff * 2, ch - diff * 2},
-			{diff, diff + (ch << 1), game.w - diff * 2, ch - diff * 2},
-			{diff, diff + (ch << 1) + ch, game.w - diff * 2, ch - diff * 2},
+			{diff, diff + ch, winwidth, winheight},
+			{diff, diff + (ch << 1), winwidth, winheight},
+			{diff, diff + (ch << 1) + ch, winwidth, winheight},
 		};
 
 		SDL_FillRects(game.surf, options, 3,
@@ -131,6 +139,8 @@ selection:
 		break;
 	case 1:
 		printf("Choose players\n");
+		notquit = true;
+		/* TODO Display player num selection */
 		goto selection_loop;
 		break;
 	case 2:
