@@ -56,12 +56,6 @@ homeMenu(void)
 {
 	SDL_Event event;
 
-	/* Poll events to get the right resolution */
-	SDL_PollEvent(&event);
-
-	SDL_GetWindowSize(game.win, &game.w, &game.h);
-	game.surf = SDL_GetWindowSurface(game.win);
-
 	game.numplayers = 0;
 
 	int focus = 0;
@@ -97,8 +91,9 @@ selection_loop:
 						quitloop(0);
 						return;
 					case SDL_SCANCODE_RETURN:
-						/* printf("%d\n", focus); */
-						goto selection;
+						notquit = false;
+						break;
+					default:
 						break;
 				}
 			}
@@ -133,13 +128,10 @@ selection_loop:
 		SDL_RenderPresent(game.rnd);
 
 		SDL_UpdateWindowSurface(game.win);
+
 	}
-selection:
-	switch (focus) {
-	case 0:
-		printf("Start Game\n");
-		break;
-	case 1:
+
+	if (focus == 1) {
 		if (game.numplayers == 0)
 			game.numplayers = 1;
 		else
@@ -148,10 +140,9 @@ selection:
 		printf("Num players = %d\n", game.numplayers);
 		notquit = true;
 		goto selection_loop;
-	case 2:
+	} else if (focus == 2) {
 		printf("Exit\n");
 		quitloop(0);
-		break;
 	}
 }
 
