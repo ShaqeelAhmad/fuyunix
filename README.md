@@ -6,8 +6,8 @@ A small platformer game using SDL2
 SDL2_image
 C compiler*
 ```
-\* I have only tried with tcc, gcc and clang. You'll also have to edit the
-Makefile if you're using gcc / clang
+\* I have only tried with tcc, gcc and clang; I mostly use tcc and might forget
+to test with gcc / clang.
 
 # Portablility
 I use Linux and can't guarantee that the program will work on other operating
@@ -19,11 +19,16 @@ systems
 `data/` contains the assets
 
 # Installation
-You might need to edit the Makefile depending on your compiler
 ```sh
 make
 make install
 ```
+
+# Usage
+-v for version
+don't pass any arguments to start the game.
+
+Vi keybindings by default because why not.
 
 # License
 GPLv3 [LICENSE](LICENSE)
