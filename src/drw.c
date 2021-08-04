@@ -62,6 +62,8 @@ homeMenu(void)
 	SDL_GetWindowSize(game.win, &game.w, &game.h);
 	game.surf = SDL_GetWindowSurface(game.win);
 
+	game.numplayers = 0;
+
 	int focus = 0;
 	bool notquit = true;
 
@@ -81,20 +83,20 @@ selection_loop:
 				quitloop(0);
 				return;
 			} else if (event.type == SDL_KEYDOWN) {
-				switch (event.key.keysym.sym) {
-					case SDLK_k:
+				switch (event.key.keysym.scancode) {
+					case SDL_SCANCODE_K:
 						if (focus > 0)
 							focus -= 1;
 						break;
-					case SDLK_j:
+					case SDL_SCANCODE_J:
 						if (focus < 2)
 							focus += 1;
 						break;
-					case SDLK_q:
+					case SDL_SCANCODE_Q:
 						notquit = false;
 						quitloop(0);
 						return;
-					case SDLK_RETURN:
+					case SDL_SCANCODE_RETURN:
 						/* printf("%d\n", focus); */
 						goto selection;
 						break;
@@ -138,11 +140,14 @@ selection:
 		printf("Start Game\n");
 		break;
 	case 1:
-		printf("Choose players\n");
+		if (game.numplayers == 0)
+			game.numplayers = 1;
+		else
+			game.numplayers = 0;
+
+		printf("Num players = %d\n", game.numplayers);
 		notquit = true;
-		/* TODO Display player num selection */
 		goto selection_loop;
-		break;
 	case 2:
 		printf("Exit\n");
 		quitloop(0);

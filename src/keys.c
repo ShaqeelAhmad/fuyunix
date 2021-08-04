@@ -35,26 +35,26 @@ void down(int player);
 void jump(int player);
 
 struct Key {
-	SDL_Keycode key;
+	SDL_Scancode key;
 	void (*func)(int);
 	int player;
 };
 
 static const struct Key key[] = {
-	{SDLK_q,         quitloop,     0},
-	{SDLK_ESCAPE,     drwmenu,     0},
+	{SDL_SCANCODE_Q,         quitloop,     0},
+	{SDL_SCANCODE_ESCAPE,     drwmenu,     0},
 
 	/* Player 1 */
-	{SDLK_h,             left,     0},
-	{SDLK_j,             down,     0},
-	{SDLK_k,             jump,     0},
-	{SDLK_l,            right,     0},
+	{SDL_SCANCODE_H,             left,     0},
+	{SDL_SCANCODE_J,             down,     0},
+	{SDL_SCANCODE_K,             jump,     0},
+	{SDL_SCANCODE_L,            right,     0},
 
 	/* Player 2 */
-	{SDLK_a,             left,     1},
-	{SDLK_s,             down,     1},
-	{SDLK_w,             jump,     1},
-	{SDLK_d,            right,     1},
+	{SDL_SCANCODE_A,             left,     1},
+	{SDL_SCANCODE_S,             down,     1},
+	{SDL_SCANCODE_W,             jump,     1},
+	{SDL_SCANCODE_D,            right,     1},
 };
 
 void
@@ -88,7 +88,7 @@ loopkeys(void)
 	unsigned long int i;
 	size_t size = sizeof(key) / sizeof(key[0]);
 	for (i = 0; i < size; i++) {
-		if (keyevent->keysym.sym == key[i].key) {
+		if (keyevent->keysym.scancode == key[i].key) {
 			key[i].func(key[i].player);
 		}
 	}
