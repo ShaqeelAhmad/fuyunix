@@ -31,7 +31,6 @@
 #include "drw.h"
 #include "keys.h"
 #include "fuyunix.h"
-#include "file.h"
 
 /* global variables */
 static bool quit = false;
@@ -47,9 +46,6 @@ quitloop(int player)
 void
 run(void)
 {
-
-	int level = readSaveFile();
-
 	homeMenu();
 
 	SDL_Event event;
@@ -63,8 +59,6 @@ run(void)
 		}
 		drw();
 	}
-
-	writeSaveFile(level);
 }
 
 int

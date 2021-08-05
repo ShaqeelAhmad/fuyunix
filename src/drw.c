@@ -23,6 +23,7 @@
 #include <SDL_image.h>
 
 #include "fuyunix.h"
+#include "file.h"
 
 /* structs */
 struct Player {
@@ -43,6 +44,7 @@ struct Game {
 	int h;
 	int w;
 	int numplayers;
+	int level;
 };
 
 static struct Game game;
@@ -93,6 +95,7 @@ selection_loop:
 					case SDL_SCANCODE_RETURN:
 						notquit = false;
 						break;
+						/* gcc / clang needs default: */
 					default:
 						break;
 				}
@@ -161,11 +164,15 @@ init(void)
 			0);
 
 	game.rnd = SDL_CreateRenderer(game.win, -1, 0);
+
+	game.level = readSaveFile();
 }
 
 void
 cleanup(void)
 {
+	writeSaveFile(game.level);
+
 	/* TODO Possibly write savefile here */
 	SDL_DestroyRenderer(game.rnd);
 	SDL_DestroyWindow(game.win);
