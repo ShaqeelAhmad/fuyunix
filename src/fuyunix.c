@@ -36,9 +36,9 @@
 static bool quit = false;
 
 /* Function definitions */
-/* Other parts of program will call quitloop to exit the game */
+
 void
-quitloop(int player)
+quitloop()
 {
 	quit = true;
 }
@@ -53,7 +53,7 @@ run(void)
 	while (!quit) {
 		while (SDL_PollEvent(&event) != 0) {
 			if (event.type == SDL_QUIT)
-				quitloop(0);
+				quitloop();
 			else if (event.type == SDL_KEYDOWN)
 				handleKeys(&event.key);
 		}
@@ -68,7 +68,7 @@ main(int argc, char *argv[])
 
 	while ((x = getopt(argc, argv, "v")) != -1) {
 		if (x == 'v') {
-			puts("Fuyunix: "VERSION);
+			puts(NAME": "VERSION);
 			return EXIT_SUCCESS;
 		} else {
 			fputs("Usage: fuyunix [-v]\n"

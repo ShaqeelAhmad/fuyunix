@@ -41,7 +41,7 @@ struct Key {
 };
 
 static const struct Key key[] = {
-	{SDL_SCANCODE_Q,         quitloop,     0},
+	{SDL_SCANCODE_Q,          drwmenu,     0},
 	{SDL_SCANCODE_ESCAPE,     drwmenu,     0},
 
 	/* Player 1 */

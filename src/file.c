@@ -30,7 +30,7 @@
 #define SAVEPATH "XDG_STATE_HOME"
 
 /* Only handles continuous comments. I use it only at the top of file */
-void
+static void
 handleComments(FILE *fp)
 {
 	while (fgetc(fp) == '#') {
@@ -38,18 +38,22 @@ handleComments(FILE *fp)
 	}
 }
 
-char *
+static char *
 getPath(char *xdgdir, char *file, char *altdir)
 {
+	/* FIXME The variable naming sucks */
 	char *path;
 	char *fullpath;
 	char *dir = "/fuyunix";
 
 	path = getenv(xdgdir);
+	/* TODO Improve path handling */
 	if (path == NULL) {
 		path = getenv("HOME");
-		if (path == NULL)
+		if (path == NULL) {
 			fprintf(stderr, "HOME is not set\n");
+			return NULL;
+		}
 
 		dir = altdir;
 	}
@@ -58,14 +62,26 @@ getPath(char *xdgdir, char *file, char *altdir)
 	size_t size = strlen(path) + strlen(dir);
 
 	dirpath = malloc(size);
+	if (dirpath == NULL) {
+		fputs("Unable to allocate memory for path\n", stderr);
+		return NULL;
+	}
 	snprintf(dirpath, size + 1, "%s%s", path, dir);
 
 	if (mkdir(dirpath, 0755) != 0)
-		if(errno != EEXIST)
+		if(errno != EEXIST) {
 			perror("Unable to create save directory\n");
+			free(dirpath);
+			return NULL;
+		}
 
 	size = size + strlen(file);
 	fullpath = malloc(size);
+	if (fullpath == NULL) {
+		fputs("Unable to allocate memory for path\n", stderr);
+		free(dirpath);
+		return NULL;
+	}
 
 	snprintf(fullpath, size + 1, "%s%s", dirpath, file);
 
@@ -79,7 +95,6 @@ int
 readSaveFile(void)
 {
 	int level;
-
 	char *savepath;
 	FILE *fp;
 
@@ -89,6 +104,7 @@ readSaveFile(void)
 
 	if (fp == NULL) {
 		free(savepath);
+		/* Default level = 1 */
 		return 1;
 	}
 
@@ -110,7 +126,7 @@ readSaveFile(void)
 void
 writeSaveFile(int level)
 {
-	char *comment = "#This file should not be edited manually\n"
+	char *comment = "# This file should not be edited manually\n"
 					"# Also I only handle comments on the top of file";
 	char *savepath;
 	FILE *fp;
