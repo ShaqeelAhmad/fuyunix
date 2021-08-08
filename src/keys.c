@@ -26,7 +26,7 @@
 #include "file.h"
 
 /* Global variables */
-SDL_KeyboardEvent *keyevent;
+static SDL_KeyboardEvent *keyevent;
 
 /* Function declarations */
 void left(int player);
@@ -81,11 +81,10 @@ right(int player)
 	fprintf(stderr, "%d\n", player);
 }
 
-void
+static void
 loopkeys(void)
 {
-	/* TODO handle the key differently (SCANCODE ?) */
-	unsigned long int i;
+	size_t i;
 	size_t size = sizeof(key) / sizeof(key[0]);
 	for (i = 0; i < size; i++) {
 		if (keyevent->keysym.scancode == key[i].key) {
