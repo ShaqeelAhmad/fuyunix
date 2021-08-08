@@ -5,12 +5,14 @@ DIR = /usr/local
 CFLAGS = $(shell sdl2-config --cflags)
 CFLAGS += -Wall -Werror -pedantic -Wextra -std=c99 -Wno-unused-parameter
 
+CFLAGS += $(shell pkg-config --cflags cairo)
+
 # Required for tcc
 CFLAGS += -DSDL_DISABLE_IMMINTRIN_H -DSDL_MAIN_HANDLED
 
 ## Doesn't work with tcc
 # LDFLAGS = $(shell sdl2-config --libs) -lSDL2_image
-LDFLAGS = -lSDL2 -lSDL2_image
+LDFLAGS = -lSDL2 -lSDL2_image -lcairo
 
 SRC = fuyunix.c keys.c drw.c file.c
 OBJ = $(SRC:.c=.o)

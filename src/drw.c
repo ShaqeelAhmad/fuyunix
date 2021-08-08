@@ -17,6 +17,7 @@
  *  along with fuyunix.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <cairo.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <SDL.h>
@@ -24,6 +25,8 @@
 
 #include "fuyunix.h"
 #include "file.h"
+
+/* static const char resourcepath[] = "/usr/local/games/fuyunix/"; */
 
 /* structs */
 struct Player {
@@ -73,6 +76,7 @@ handleMenuKeys(int *focus, int max)
 						*focus += 1;
 					break;
 				case SDL_SCANCODE_Q:
+					quitloop();
 					return false;
 				case SDL_SCANCODE_RETURN:
 					return false;
@@ -85,7 +89,26 @@ handleMenuKeys(int *focus, int max)
 	return true;
 }
 
-/* TODO Draw text */
+void
+drwMenuText(char *text, double x, double y)
+{
+	cairo_surface_t *cSurface = cairo_image_surface_create_for_data(
+			(unsigned char *)game.surf->pixels, CAIRO_FORMAT_RGB24,
+			game.surf->w, game.surf->h, game.surf->pitch);
+
+	cairo_t *cr = cairo_create(cSurface);
+
+	cairo_select_font_face(cr, "normal", CAIRO_FONT_SLANT_NORMAL,
+			CAIRO_FONT_WEIGHT_NORMAL);
+	cairo_set_font_size(cr, 32.0);
+	cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
+	cairo_move_to(cr, x, y);
+	cairo_show_text(cr, text);
+
+	cairo_destroy(cr);
+	cairo_surface_destroy(cSurface);
+}
+
 void
 homeMenu(void)
 {
@@ -104,8 +127,6 @@ homeMenu(void)
 selection_loop:
 	while (notquit) {
 		notquit = handleMenuKeys(&focus, 2);
-
-		/* TODO add game name on top part of screen */
 
 		/* Move this to it's own function? (draw box options). Static variables? */
 		SDL_GetWindowSize(game.win, &game.w, &game.h);
@@ -132,10 +153,13 @@ selection_loop:
 		SDL_FillRect(game.surf, &options[focus],
 				SDL_MapRGB(game.surf->format, 20, 190, 180));
 
-		SDL_RenderPresent(game.rnd);
+		/* TODO Calculate where to position text */
+		drwMenuText("TEXT", diff, diff + ch);
 
+		SDL_RenderPresent(game.rnd);
 		SDL_UpdateWindowSurface(game.win);
 
+		SDL_FreeSurface(game.surf);
 	}
 
 	if (focus == 1) {
