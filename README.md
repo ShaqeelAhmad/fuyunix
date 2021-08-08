@@ -3,8 +3,9 @@ A small platformer game using SDL2
 
 # Dependencies
 ```
-SDL2_image
 C compiler*
+Cairo
+SDL2_image
 ```
 \* I have only tried with tcc, gcc and clang; I mostly use tcc and might forget
 to test with gcc / clang.
