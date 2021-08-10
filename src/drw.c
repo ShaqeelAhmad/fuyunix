@@ -42,18 +42,21 @@ struct Game {
 
 	SDL_Surface *surf;
 
-	SDL_DisplayMode dm;
-
 	int h;
 	int w;
 
-	/* Not using bool for possible addtions of players */
+	/* Old width / height */
+	int ow;
+	int oh;
+
 	int numplayers;
 	int level;
 };
 
 static struct Game game;
 
+/* I'm lazy to manually allocate memory and check errors */
+static struct Player player[2];
 
 /* Function definitions */
 bool
@@ -64,6 +67,7 @@ handleMenuKeys(int *focus, int max)
 	while (SDL_PollEvent(&event) != 0) {
 		if (event.type == SDL_QUIT) {
 			quitloop();
+			*focus = 2;
 			return false;
 		} else if (event.type == SDL_KEYDOWN) {
 			switch (event.key.keysym.scancode) {
@@ -77,8 +81,10 @@ handleMenuKeys(int *focus, int max)
 					break;
 				case SDL_SCANCODE_Q:
 					quitloop();
+					*focus = 2;
 					return false;
 				case SDL_SCANCODE_RETURN:
+				case SDL_SCANCODE_SPACE:
 					return false;
 					/* gcc / clang needs default: */
 				default:
@@ -90,7 +96,7 @@ handleMenuKeys(int *focus, int max)
 }
 
 void
-drwMenuText(char *text, double x, double y)
+drwMenuText(char *text, double x, double y, double size)
 {
 	cairo_surface_t *cSurface = cairo_image_surface_create_for_data(
 			(unsigned char *)game.surf->pixels, CAIRO_FORMAT_RGB24,
@@ -100,7 +106,7 @@ drwMenuText(char *text, double x, double y)
 
 	cairo_select_font_face(cr, "normal", CAIRO_FONT_SLANT_NORMAL,
 			CAIRO_FONT_WEIGHT_NORMAL);
-	cairo_set_font_size(cr, 32.0);
+	cairo_set_font_size(cr, size);
 	cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
 	cairo_move_to(cr, x, y);
 	cairo_show_text(cr, text);
@@ -117,29 +123,25 @@ homeMenu(void)
 
 	int diff = 30;
 	int ch;
-	int oldheight = 0;
-	int oldwidth = 0;
 	int winwidth;
 	int winheight;
-
-	game.numplayers = 0;
 
 selection_loop:
 	while (notquit) {
 		notquit = handleMenuKeys(&focus, 2);
 
-		/* Move this to it's own function? (draw box options). Static variables? */
 		SDL_GetWindowSize(game.win, &game.w, &game.h);
-		game.surf = SDL_GetWindowSurface(game.win);
 
-		if (game.h != oldheight) {
+		if (game.h != game.oh) {
 			ch = game.h >> 2;
-			oldheight = game.h;
 			winheight = ch - (diff << 1);
+			game.oh = game.h;
+			game.surf = SDL_GetWindowSurface(game.win);
 		}
-		if (game.w != oldwidth) {
+		if (game.w != game.ow) {
 			winwidth = game.w - (diff << 1);
-			oldwidth = game.w;
+			game.ow = game.w;
+			game.surf = SDL_GetWindowSurface(game.win);
 		}
 
 		SDL_Rect options[3] = {
@@ -153,13 +155,20 @@ selection_loop:
 		SDL_FillRect(game.surf, &options[focus],
 				SDL_MapRGB(game.surf->format, 20, 190, 180));
 
+		/* Clang requires array to be of size 2 */
+		char nplayer[2];
+		nplayer[0] = game.numplayers + '1';
+
 		/* TODO Calculate where to position text */
-		drwMenuText("TEXT", diff, diff + ch);
+		drwMenuText(NAME, 0, winheight >> 1, 64.0);
 
-		SDL_RenderPresent(game.rnd);
+		drwMenuText("Start", 10 + diff, 75 + diff + ch, 32.0);
+		drwMenuText("Choose players", 10 + diff, 75 + diff + (ch << 1), 32.0);
+		drwMenuText(nplayer, winwidth - diff, 75 + diff + (ch << 1), 32.0);
+		drwMenuText("Exit", 10 + diff, 75 + diff + (ch << 1) + ch, 32.0);
+
 		SDL_UpdateWindowSurface(game.win);
-
-		SDL_FreeSurface(game.surf);
+		SDL_Delay(16);
 	}
 
 	if (focus == 1) {
@@ -168,7 +177,6 @@ selection_loop:
 		else
 			game.numplayers = 0;
 
-		printf("Num players = %d\n", game.numplayers);
 		notquit = true;
 		goto selection_loop;
 	} else if (focus == 2) {
@@ -178,18 +186,33 @@ selection_loop:
 }
 
 void
+initVariables()
+{
+	game.level = readSaveFile();
+
+	game.numplayers = 0;
+
+	game.ow = 0;
+	game.oh = 0;
+
+	player[0].x = 0;
+	player[0].y = 0;
+	player[1].x = 0;
+	player[1].y = 0;
+}
+
+void
 init(void)
 {
 	SDL_Init(SDL_INIT_VIDEO);
 
-	SDL_GetDesktopDisplayMode(0, &game.dm);
-
 	game.win = SDL_CreateWindow(NAME, SDL_WINDOWPOS_UNDEFINED,
-			SDL_WINDOWPOS_UNDEFINED, game.dm.w, game.dm.h, 0);
+			SDL_WINDOWPOS_UNDEFINED, 640, 480, 0);
 
 	game.rnd = SDL_CreateRenderer(game.win, -1, 0);
 
-	game.level = readSaveFile();
+
+	initVariables();
 }
 
 void
@@ -206,23 +229,42 @@ cleanup(void)
 void
 drwmenu(int player)
 {
-	int x = 20;
-	int y = 20;
-	int width = game.w - x * 2;
-	int height = game.h - y * 2;
-	SDL_Rect menu = { x, y, width, height };
+	/* TODO Make an actual menu. I probably won't do this soon */
 
-	SDL_FillRect(game.surf, &menu,
-			SDL_MapRGB(game.surf->format, 20, 150, 180));
+	SDL_FillRect(game.surf, NULL,
+			SDL_MapRGB(game.surf->format, 0, 0, 0));
+	drwMenuText("Use your window manager to quit", 0, game.h - 20, 40);
 
-	SDL_RenderPresent(game.rnd);
+	SDL_UpdateWindowSurface(game.win);
 }
+
+void
+drwplayers(void)
+{
+	/* player[p].frame = IMG_Load("../data/sprites/players/player1.png"); */
+}
+
+void
+getSurf(void)
+{
+	SDL_GetWindowSize(game.win, &game.w, &game.h);
+	if (game.w != game.ow) {
+		game.ow = game.w;
+		game.surf = SDL_GetWindowSurface(game.win);
+	}
+	if (game.h != game.oh) {
+		game.oh = game.h;
+		game.surf = SDL_GetWindowSurface(game.win);
+	}
+}
+
 
 void
 drw(void)
 {
-	SDL_GetWindowSize(game.win, &game.w, &game.h);
-	game.surf = SDL_GetWindowSurface(game.win);
+	getSurf();
+
+	drwplayers();
 
 	SDL_UpdateWindowSurface(game.win);
 }
