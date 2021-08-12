@@ -6,6 +6,7 @@ A small platformer game using SDL2
 C compiler*
 Cairo
 SDL2_image
+Make
 ```
 \* I have only tried with tcc, gcc and clang; I mostly use tcc and might forget
 to test with gcc / clang.
