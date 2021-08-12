@@ -2,16 +2,16 @@
 # CC = clang
 DIR = /usr/local
 
-CFLAGS = $(shell sdl2-config --cflags)
-CFLAGS += -Wall -Werror -pedantic -Wextra -std=c99 -Wno-unused-parameter
+# CFLAGS = $(shell pkg-config --cflags cairo) $(shell sdl2-config --cflags)
+## I'm not sure why but bmake doesn't work with the syntax above
 
-CFLAGS += $(shell pkg-config --cflags cairo)
+CFLAGS = `sdl2-config --cflags` `pkg-config --cflags cairo`
+
+CFLAGS += -Wall -Werror -pedantic -Wextra -std=c99 -Wno-unused-parameter
 
 # Required for tcc
 CFLAGS += -DSDL_DISABLE_IMMINTRIN_H -DSDL_MAIN_HANDLED
 
-## Doesn't work with tcc
-# LDFLAGS = $(shell sdl2-config --libs) -lSDL2_image
 LDFLAGS = -lSDL2 -lSDL2_image -lcairo
 
 SRC = fuyunix.c keys.c drw.c file.c
@@ -23,10 +23,10 @@ all: fuyunix
 	$(CC) -c $< $(CFLAGS)
 
 fuyunix: $(OBJ)
-	$(CC) -o $@ $(OBJ) $(LDFLAGS) $(CFLAGS)
+	$(CC) -o $@ $(OBJ) $(LDFLAGS)
 
 clean:
-	$(RM) fuyunix $(OBJ)
+	rm -f fuyunix $(OBJ)
 
 install: all
 	mkdir -p $(DIR)/bin
@@ -34,6 +34,7 @@ install: all
 	chmod 755 $(DIR)/bin/fuyunix
 
 uninstall:
-	$(RM) $(DIR)/bin/fuyunix
+	rm -f $(DIR)/bin/fuyunix
+
 
 .PHONY: clean install uninstall
