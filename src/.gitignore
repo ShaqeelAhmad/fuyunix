@@ -1,2 +1,3 @@
 *.o
 fuyunix
+test/compile.log
