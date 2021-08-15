@@ -2,10 +2,10 @@
 # CC = clang
 DIR = /usr/local
 
-# CFLAGS = $(shell pkg-config --cflags cairo) $(shell sdl2-config --cflags)
-## I'm not sure why but bmake doesn't work with the syntax above
+# CFLAGS := $(shell pkg-config --cflags cairo) $(shell sdl2-config --cflags)
+# CFLAGS = `sdl2-config --cflags` `pkg-config --cflags cairo`
 
-CFLAGS = `sdl2-config --cflags` `pkg-config --cflags cairo`
+CFLAGS != pkg-config --cflags cairo; sdl2-config --cflags
 
 CFLAGS += -Wall -Werror -pedantic -Wextra -std=c99 -Wno-unused-parameter
 

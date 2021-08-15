@@ -59,7 +59,7 @@ static struct Game game;
 static struct Player player[2];
 
 /* Function definitions */
-bool
+static bool
 handleMenuKeys(int *focus, int max)
 {
 	SDL_Event event;
@@ -95,8 +95,8 @@ handleMenuKeys(int *focus, int max)
 	return true;
 }
 
-void
-drwMenuText(char *text, double x, double y, double size)
+static void
+drwMenuText(char *text, int x, int y, double size)
 {
 	cairo_surface_t *cSurface = cairo_image_surface_create_for_data(
 			(unsigned char *)game.surf->pixels, CAIRO_FORMAT_RGB24,
@@ -108,7 +108,7 @@ drwMenuText(char *text, double x, double y, double size)
 			CAIRO_FONT_WEIGHT_NORMAL);
 	cairo_set_font_size(cr, size);
 	cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
-	cairo_move_to(cr, x, y);
+	cairo_move_to(cr, (double)x, (double)y);
 	cairo_show_text(cr, text);
 
 	cairo_destroy(cr);
@@ -185,7 +185,7 @@ selection_loop:
 	}
 }
 
-void
+static void
 initVariables()
 {
 	game.level = readSaveFile();
@@ -238,13 +238,13 @@ drwmenu(int player)
 	SDL_UpdateWindowSurface(game.win);
 }
 
-void
+static void
 drwplayers(void)
 {
 	/* player[p].frame = IMG_Load("../data/sprites/players/player1.png"); */
 }
 
-void
+static void
 getSurf(void)
 {
 	SDL_GetWindowSize(game.win, &game.w, &game.h);

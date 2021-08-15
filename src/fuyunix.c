@@ -43,7 +43,7 @@ quitloop()
 	quit = true;
 }
 
-void
+static void
 run(void)
 {
 	homeMenu();

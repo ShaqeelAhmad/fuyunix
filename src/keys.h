@@ -1,1 +1,1 @@
-bool handleKeys(SDL_KeyboardEvent *keyevent);
+void handleKeys(SDL_KeyboardEvent *keyevent);
