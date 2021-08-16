@@ -9,7 +9,7 @@ CFLAGS != pkg-config --cflags cairo; sdl2-config --cflags
 
 CFLAGS += -Wall -Werror -pedantic -Wextra -std=c99 -Wno-unused-parameter
 
-# Required for tcc
+## Required for tcc
 CFLAGS += -DSDL_DISABLE_IMMINTRIN_H -DSDL_MAIN_HANDLED
 
 LDFLAGS = -lSDL2 -lSDL2_image -lcairo
