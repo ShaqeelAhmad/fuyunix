@@ -25,6 +25,8 @@ systems
 make
 make install
 ```
+use `make CC=cc` to specify a compiler or just edit the Makefile
+
 
 # Usage
 -v for version
@@ -33,4 +35,4 @@ don't pass any arguments to start the game.
 Vi keybindings by default because why not.
 
 # License
-GPLv3 [LICENSE](LICENSE)
+GPLv3 [LICENSE](LICENSE) for the source code and CC0 for the images
