@@ -25,15 +25,17 @@
 
 #include "fuyunix.h"
 #include "file.h"
-
-/* static const char resourcepath[] = "/usr/local/games/fuyunix/"; */
+#include "drw.h"
 
 /* structs */
 struct Player {
 	SDL_Texture *frame[4];
+	SDL_Texture **current;
 
 	int x;
 	int y;
+	int w;
+	int h;
 };
 
 struct Game {
@@ -53,12 +55,57 @@ struct Game {
 	int level;
 };
 
+/* Global variables */
 static struct Game game;
+static struct Player *player;
 
-/* I'm lazy to manually allocate memory and check errors */
-static struct Player player[2];
+
+/* Function declarations */
+static void freePlayerTextures();
+static void loadPlayerTextures();
+
 
 /* Function definitions */
+static void
+initVariables()
+{
+	game.level = readSaveFile();
+
+	game.numplayers = 0;
+
+	game.ow = 0;
+	game.oh = 0;
+
+	player = NULL;
+}
+
+void
+init(void)
+{
+	SDL_Init(SDL_INIT_VIDEO);
+
+	game.win = SDL_CreateWindow(NAME, SDL_WINDOWPOS_UNDEFINED,
+			SDL_WINDOWPOS_UNDEFINED, 640, 480, 0);
+
+	game.rnd = SDL_CreateRenderer(game.win, -1, 0);
+
+
+	initVariables();
+}
+
+void
+cleanup(void)
+{
+	freePlayerTextures();
+
+	writeSaveFile(game.level);
+
+	SDL_DestroyRenderer(game.rnd);
+	SDL_DestroyWindow(game.win);
+
+	SDL_Quit();
+}
+
 static bool
 handleMenuKeys(int *focus, int max)
 {
@@ -115,6 +162,10 @@ drwMenuText(char *text, int x, int y, double size)
 	cairo_surface_destroy(cSurface);
 }
 
+/*
+ * Note: The bitshifts in this function are basically division or
+ * multiplications and can be replaced with the equivalent versions
+ */
 void
 homeMenu(void)
 {
@@ -132,13 +183,12 @@ selection_loop:
 
 		SDL_GetWindowSize(game.win, &game.w, &game.h);
 
-		if (game.h != game.oh) {
+		if (game.h != game.oh || game.w != game.ow) {
 			ch = game.h >> 2;
+			diff = game.h >> 6;
 			winheight = ch - (diff << 1);
 			game.oh = game.h;
-			game.surf = SDL_GetWindowSurface(game.win);
-		}
-		if (game.w != game.ow) {
+
 			winwidth = game.w - (diff << 1);
 			game.ow = game.w;
 			game.surf = SDL_GetWindowSurface(game.win);
@@ -155,11 +205,13 @@ selection_loop:
 		SDL_FillRect(game.surf, &options[focus],
 				SDL_MapRGB(game.surf->format, 20, 190, 180));
 
-		/* Clang requires array to be of size 2 */
+		/* clang requires array to be of size 2 */
 		char nplayer[2];
 		nplayer[0] = game.numplayers + '1';
+		nplayer[1] = '\0';
 
 		/* TODO Calculate where to position text */
+		/* Note: I'll probably do it when the game is almost finished */
 		drwMenuText(NAME, 0, winheight >> 1, 64.0);
 
 		drwMenuText("Start", 10 + diff, 75 + diff + ch, 32.0);
@@ -182,48 +234,9 @@ selection_loop:
 	} else if (focus == 2) {
 		printf("Exit\n");
 		quitloop();
+	} else {
+		loadPlayerTextures();
 	}
-}
-
-static void
-initVariables()
-{
-	game.level = readSaveFile();
-
-	game.numplayers = 0;
-
-	game.ow = 0;
-	game.oh = 0;
-
-	player[0].x = 0;
-	player[0].y = 0;
-	player[1].x = 0;
-	player[1].y = 0;
-}
-
-void
-init(void)
-{
-	SDL_Init(SDL_INIT_VIDEO);
-
-	game.win = SDL_CreateWindow(NAME, SDL_WINDOWPOS_UNDEFINED,
-			SDL_WINDOWPOS_UNDEFINED, 640, 480, 0);
-
-	game.rnd = SDL_CreateRenderer(game.win, -1, 0);
-
-
-	initVariables();
-}
-
-void
-cleanup(void)
-{
-	writeSaveFile(game.level);
-
-	SDL_DestroyRenderer(game.rnd);
-	SDL_DestroyWindow(game.win);
-
-	SDL_Quit();
 }
 
 void
@@ -231,28 +244,108 @@ drwmenu(int player)
 {
 	/* TODO Make an actual menu. I probably won't do this soon */
 
-	SDL_FillRect(game.surf, NULL,
-			SDL_MapRGB(game.surf->format, 0, 0, 0));
-	drwMenuText("Use your window manager to quit", 0, game.h - 20, 40);
+	quitloop();
+}
 
-	SDL_UpdateWindowSurface(game.win);
+static void
+loadPlayerTextures(void)
+{
+	player = (struct Player *)calloc(game.numplayers + 1, sizeof(struct Player));
+	if (player == NULL) {
+		quitloop();
+		return;
+	}
+
+	for (int i = 0; i <= game.numplayers; i++) {
+		/* TODO Load all the frames for all the players. */
+		player[i].frame[0] = IMG_LoadTexture(game.rnd,
+				RESOURCE_PATH "/data/sprite.png");
+	}
+	player[0].current = &player[0].frame[0];
+
+	player[0].x = 0;
+	player[0].y = 0;
+
+	/* Sprite is 32x32 pixels */
+	/* possibly scale according to screen size */
+	player[0].w = 32 * 2;
+	player[0].h = 32 * 2;
+}
+
+static void
+freePlayerTextures(void)
+{
+	if (player == NULL) {
+		return;
+	}
+
+	for (int i = 0; i <= game.numplayers; i++) {
+		SDL_DestroyTexture(player[i].frame[0]);
+	}
+
+	free(player);
 }
 
 static void
 drwplayers(void)
 {
-	/* player[p].frame = IMG_Load("../data/sprites/players/player1.png"); */
+	SDL_RenderClear(game.rnd);
+	SDL_Rect playrect = {
+		player[0].x,
+		player[0].y,
+		player[0].w,
+		player[0].h,
+	};
+
+	if (SDL_RenderCopy(game.rnd, *player[0].current, NULL, &playrect) < 0) {
+		fprintf(stderr, "%s\n", SDL_GetError());
+	}
+	SDL_RenderPresent(game.rnd);
+}
+
+void
+left(int i)
+{
+	if (player[0].x <= 0)
+		return;
+
+	player[0].x -= 5;
+}
+
+void
+down(int i)
+{
+	if ((player[0].y + player[0].h) >= game.h)
+		return;
+
+	player[0].y += 5;
+}
+
+void
+jump(int i)
+{
+	/* TODO Actually implement jump and gravity */
+	if (player[0].y <= 0)
+		return;
+
+	player[0].y -= 5;
+}
+
+void
+right(int i)
+{
+	if ((player[0].x + player[0].w) >= game.w)
+		return;
+
+	player[0].x += 5;
 }
 
 static void
 getSurf(void)
 {
 	SDL_GetWindowSize(game.win, &game.w, &game.h);
-	if (game.w != game.ow) {
+	if (game.w != game.ow || game.h != game.oh) {
 		game.ow = game.w;
-		game.surf = SDL_GetWindowSurface(game.win);
-	}
-	if (game.h != game.oh) {
 		game.oh = game.h;
 		game.surf = SDL_GetWindowSurface(game.win);
 	}
@@ -266,5 +359,5 @@ drw(void)
 
 	drwplayers();
 
-	SDL_UpdateWindowSurface(game.win);
+	/* SDL_UpdateWindowSurface(game.win); */
 }

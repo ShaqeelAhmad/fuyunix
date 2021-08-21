@@ -22,18 +22,11 @@
 #include <SDL.h>
 
 #include "drw.h"
-#include "fuyunix.h"
-#include "file.h"
 
 /* Global variables */
 static SDL_KeyboardEvent *keyevent;
 
 /* Function declarations */
-void left(int player);
-void right(int player);
-void down(int player);
-void jump(int player);
-
 struct Key {
 	SDL_Scancode key;
 	void (*func)(int);
@@ -57,30 +50,6 @@ static const struct Key key[] = {
 	{SDL_SCANCODE_D,            right,     1},
 };
 
-void
-left(int player)
-{
-	fprintf(stderr, "%d\n", player);
-}
-
-void
-down(int player)
-{
-	fprintf(stderr, "%d\n", player);
-}
-
-void
-jump(int player)
-{
-	fprintf(stderr, "%d\n", player);
-}
-
-void
-right(int player)
-{
-	fprintf(stderr, "%d\n", player);
-}
-
 static void
 loopkeys(void)
 {
@@ -90,6 +59,20 @@ loopkeys(void)
 		if (keyevent->keysym.scancode == key[i].key) {
 			key[i].func(key[i].player);
 		}
+	}
+
+	const Uint8 *state = SDL_GetKeyboardState(NULL);
+	if (state[SDL_SCANCODE_H]) {
+		left(0);
+	}
+	if (state[SDL_SCANCODE_J]) {
+		down(0);
+	}
+	if (state[SDL_SCANCODE_K]) {
+		jump(0);
+	}
+	if (state[SDL_SCANCODE_L]) {
+		right(0);
 	}
 }
 
