@@ -1,6 +1,6 @@
-# CC = gcc
-# CC = clang
-DIR = /usr/local
+CC ?= gcc
+
+DIR ?= /usr/local
 
 # CFLAGS := $(shell pkg-config --cflags cairo) $(shell sdl2-config --cflags)
 # CFLAGS = `sdl2-config --cflags` `pkg-config --cflags cairo`
