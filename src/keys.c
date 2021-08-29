@@ -22,6 +22,7 @@
 #include <SDL.h>
 
 #include "drw.h"
+#include "fuyunix.h"
 
 /* Global variables */
 static SDL_KeyboardEvent *keyevent;
@@ -34,8 +35,8 @@ struct Key {
 };
 
 static const struct Key key[] = {
-	{SDL_SCANCODE_Q,          drwmenu,     0},
-	{SDL_SCANCODE_ESCAPE,     drwmenu,     0},
+	{SDL_SCANCODE_Q,          quitloop,     0},
+	{SDL_SCANCODE_ESCAPE,     drwMenu,     0},
 
 	/* Player 1 */
 	{SDL_SCANCODE_H,             left,     0},
@@ -73,6 +74,18 @@ loopkeys(void)
 	}
 	if (state[SDL_SCANCODE_L]) {
 		right(0);
+	}
+	if (state[SDL_SCANCODE_A]) {
+		left(1);
+	}
+	if (state[SDL_SCANCODE_S]) {
+		down(1);
+	}
+	if (state[SDL_SCANCODE_W]) {
+		jump(1);
+	}
+	if (state[SDL_SCANCODE_D]) {
+		right(1);
 	}
 }
 
