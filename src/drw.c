@@ -27,15 +27,23 @@
 #include "file.h"
 #include "drw.h"
 
+#define GRAVITY 0.039f
+
 /* structs */
 struct Player {
 	SDL_Texture *frame[4];
 	SDL_Texture **current;
 
-	int x;
-	int y;
+	double x;
+	double y;
+
+	double dx;
+	double dy;
+
 	int w;
 	int h;
+
+	int falling;
 };
 
 struct Game {
@@ -118,24 +126,24 @@ handleMenuKeys(int *focus, int max)
 			return false;
 		} else if (event.type == SDL_KEYDOWN) {
 			switch (event.key.keysym.scancode) {
-				case SDL_SCANCODE_K:
-					if (*focus > 0)
-						*focus -= 1;
-					break;
-				case SDL_SCANCODE_J:
-					if (*focus < max)
-						*focus += 1;
-					break;
-				case SDL_SCANCODE_Q:
-					quitloop();
-					*focus = 2;
-					return false;
-				case SDL_SCANCODE_RETURN:
-				case SDL_SCANCODE_SPACE:
-					return false;
-					/* gcc / clang needs default: */
-				default:
-					break;
+			case SDL_SCANCODE_K:
+				if (*focus > 0)
+					*focus -= 1;
+				break;
+			case SDL_SCANCODE_J:
+				if (*focus < max)
+					*focus += 1;
+				break;
+			case SDL_SCANCODE_Q:
+				quitloop();
+				*focus = 2;
+				return false;
+			case SDL_SCANCODE_RETURN:
+			case SDL_SCANCODE_SPACE:
+				return false;
+				/* gcc / clang needs default: */
+			default:
+				break;
 			}
 		}
 	}
@@ -205,6 +213,7 @@ selection_loop:
 		SDL_FillRect(game.surf, &options[focus],
 				SDL_MapRGB(game.surf->format, 20, 190, 180));
 
+		/* Array required so it's treated as a string */
 		/* clang requires array to be of size 2 */
 		char nplayer[2];
 		nplayer[0] = game.numplayers + '1';
@@ -240,10 +249,9 @@ selection_loop:
 }
 
 void
-drwmenu(int player)
+drwMenu(int player)
 {
-	/* TODO Make an actual menu. I probably won't do this soon */
-
+	/* TODO: Make a exit menu */
 	quitloop();
 }
 
@@ -260,25 +268,28 @@ loadPlayerTextures(void)
 		/* TODO Load all the frames for all the players. */
 		player[i].frame[0] = IMG_LoadTexture(game.rnd,
 				RESOURCE_PATH "/data/sprite.png");
+
+		if (player[i].frame[0] == NULL) {
+			fprintf(stderr, "Unable to Load Texture: %s\n", IMG_GetError());
+		}
+
+		player[i].current = &player[0].frame[0];
+
+		player[i].x = 0;
+		player[i].y = 0;
+		player[i].dx = 0;
+		player[i].dy = 0;
+
+		/* Sprite is 32x32 pixels */
+		/* possibly scale according to screen size */
+		player[i].w = 32 * 2;
+		player[i].h = 32 * 2;
 	}
-	player[0].current = &player[0].frame[0];
-
-	player[0].x = 0;
-	player[0].y = 0;
-
-	/* Sprite is 32x32 pixels */
-	/* possibly scale according to screen size */
-	player[0].w = 32 * 2;
-	player[0].h = 32 * 2;
 }
 
 static void
 freePlayerTextures(void)
 {
-	if (player == NULL) {
-		return;
-	}
-
 	for (int i = 0; i <= game.numplayers; i++) {
 		SDL_DestroyTexture(player[i].frame[0]);
 	}
@@ -287,57 +298,66 @@ freePlayerTextures(void)
 }
 
 static void
-drwplayers(void)
+drwPlayers(void)
 {
-	SDL_RenderClear(game.rnd);
-	SDL_Rect playrect = {
-		player[0].x,
-		player[0].y,
-		player[0].w,
-		player[0].h,
-	};
+	for (int i = 0; i <= game.numplayers; i++) {
+		SDL_Rect playrect = { player[i].x, player[i].y, player[i].w, player[i].h };
 
-	if (SDL_RenderCopy(game.rnd, *player[0].current, NULL, &playrect) < 0) {
-		fprintf(stderr, "%s\n", SDL_GetError());
+		/* Draw a white square in place of unloaded texture */
+		if (*player[i].current == NULL) {
+			SDL_SetRenderDrawColor(game.rnd, 255, 255, 255, 255);
+			SDL_RenderFillRect(game.rnd, &playrect);
+			SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, 255);
+		} else {
+			if (SDL_RenderCopy(game.rnd, *player[i].current, NULL, &playrect) < 0) {
+				fprintf(stderr, "%s\n", SDL_GetError());
+			}
+		}
 	}
-	SDL_RenderPresent(game.rnd);
-}
-
-void
-left(int i)
-{
-	if (player[0].x <= 0)
-		return;
-
-	player[0].x -= 5;
 }
 
 void
 down(int i)
 {
-	if ((player[0].y + player[0].h) >= game.h)
-		return;
-
-	player[0].y += 5;
+	/* Do nothing for now */
 }
 
 void
 jump(int i)
 {
+	i = i > game.numplayers ? 0 : i;
+
 	/* TODO Actually implement jump and gravity */
-	if (player[0].y <= 0)
+	if (player[i].y <= 0 || player[i].falling)
 		return;
 
-	player[0].y -= 5;
+	player[i].dy = -5;
+
+	player[i].falling = 1;
 }
 
 void
 right(int i)
 {
-	if ((player[0].x + player[0].w) >= game.w)
+	i = i > game.numplayers ? 0 : i;
+
+	if ((player[i].x + player[i].w) >= game.w)
 		return;
 
-	player[0].x += 5;
+	if (player[i].dx < 3)
+		player[i].dx += 0.5;
+}
+
+void
+left(int i)
+{
+	i = i > game.numplayers ? 0 : i;
+
+	if (player[i].x <= 0)
+		return;
+
+	if (player[i].dx > -3)
+		player[i].dx -= 0.5;
 }
 
 static void
@@ -351,13 +371,64 @@ getSurf(void)
 	}
 }
 
+static void
+drwGround(void)
+{
+	int groundSize = 20;
+	SDL_Rect ground = {
+		0, game.h - groundSize, game.w, groundSize,
+	};
+	SDL_SetRenderDrawColor(game.rnd, 0xde, 0x8e, 0x22, 255);
+	SDL_RenderFillRect(game.rnd, &ground);
+	SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, 255);
+
+	/* Temporary test thingy */
+	/*
+	int w = 30;
+	SDL_Rect platform = {
+		(game.w >> 1) - w, game.h >> 1, w, w,
+	};
+	SDL_SetRenderDrawColor(game.rnd, 0xde, 0x8e, 0x22, 255);
+	SDL_RenderFillRect(game.rnd, &platform);
+	SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, 255);
+	*/
+}
+
+static void
+gravity(void)
+{
+	/* TODO Improve collision detecting so players don't clip into ground */
+	for (int i = 0; i <= game.numplayers; i++) {
+		if (player[i].y + player[i].h >= game.h - 20 && player[i].dy >= 0) {
+			player[i].dy = 0;
+			player[i].falling = 0;
+		}
+		player[i].y += player[i].dy;
+		player[i].dy += GRAVITY;
+	}
+}
+
+static void
+movePlayers(void)
+{
+	/* TODO Check if players are colliding with each other */
+	for (int i = 0; i <= game.numplayers; i++) {
+		player[i].dx = player[i].dx * 0.99;
+		player[i].x += player[i].dx;
+	}
+}
 
 void
 drw(void)
 {
 	getSurf();
+	SDL_RenderClear(game.rnd);
 
-	drwplayers();
+	gravity();
+	movePlayers();
 
-	/* SDL_UpdateWindowSurface(game.win); */
+	drwGround();
+	drwPlayers();
+
+	SDL_RenderPresent(game.rnd);
 }
