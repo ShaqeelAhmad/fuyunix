@@ -60,33 +60,53 @@ loopkeys(void)
 		if (keyevent->keysym.scancode == key[i].key) {
 			key[i].func(key[i].player);
 		}
-	}
 
-	const Uint8 *state = SDL_GetKeyboardState(NULL);
-	if (state[SDL_SCANCODE_H]) {
-		left(0);
+		const Uint8 *state = SDL_GetKeyboardState(NULL);
+		if (left == key[i].func && state[key[i].key])
+			key[i].func(key[i].player);
+		if (right == key[i].func && state[key[i].key])
+			key[i].func(key[i].player);
+		if (down == key[i].func && state[key[i].key])
+			key[i].func(key[i].player);
+		if (jump == key[i].func && state[key[i].key])
+			key[i].func(key[i].player);
 	}
-	if (state[SDL_SCANCODE_J]) {
-		down(0);
+}
+
+int
+handleMenuKeys(int *focus, int last)
+{
+	SDL_Event event;
+
+	while (SDL_PollEvent(&event) != 0) {
+		if (event.type == SDL_QUIT) {
+			quitloop();
+			*focus = last;
+			return 1;
+		} else if (event.type == SDL_KEYDOWN) {
+			switch (event.key.keysym.scancode) {
+			case SDL_SCANCODE_K:
+				if (*focus > 0)
+					*focus -= 1;
+				break;
+			case SDL_SCANCODE_J:
+				if (*focus < last)
+					*focus += 1;
+				break;
+			case SDL_SCANCODE_Q:
+				quitloop();
+				*focus = last;
+				return 1;
+			case SDL_SCANCODE_RETURN:
+			case SDL_SCANCODE_SPACE:
+				return 1;
+				// gcc / clang needs default:
+			default:
+				break;
+			}
+		}
 	}
-	if (state[SDL_SCANCODE_K]) {
-		jump(0);
-	}
-	if (state[SDL_SCANCODE_L]) {
-		right(0);
-	}
-	if (state[SDL_SCANCODE_A]) {
-		left(1);
-	}
-	if (state[SDL_SCANCODE_S]) {
-		down(1);
-	}
-	if (state[SDL_SCANCODE_W]) {
-		jump(1);
-	}
-	if (state[SDL_SCANCODE_D]) {
-		right(1);
-	}
+	return 0;
 }
 
 void

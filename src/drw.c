@@ -27,7 +27,10 @@
 #include "file.h"
 #include "drw.h"
 
-#define GRAVITY 0.039f
+/* TODO Put this in a header file */
+int handleMenuKeys(int *focus, int last);
+
+#define GRAVITY 0.035f
 
 /* structs */
 struct Player {
@@ -114,42 +117,6 @@ cleanup(void)
 	SDL_Quit();
 }
 
-static bool
-handleMenuKeys(int *focus, int max)
-{
-	SDL_Event event;
-
-	while (SDL_PollEvent(&event) != 0) {
-		if (event.type == SDL_QUIT) {
-			quitloop();
-			*focus = 2;
-			return false;
-		} else if (event.type == SDL_KEYDOWN) {
-			switch (event.key.keysym.scancode) {
-			case SDL_SCANCODE_K:
-				if (*focus > 0)
-					*focus -= 1;
-				break;
-			case SDL_SCANCODE_J:
-				if (*focus < max)
-					*focus += 1;
-				break;
-			case SDL_SCANCODE_Q:
-				quitloop();
-				*focus = 2;
-				return false;
-			case SDL_SCANCODE_RETURN:
-			case SDL_SCANCODE_SPACE:
-				return false;
-				/* gcc / clang needs default: */
-			default:
-				break;
-			}
-		}
-	}
-	return true;
-}
-
 static void
 drwMenuText(char *text, int x, int y, double size)
 {
@@ -187,7 +154,7 @@ homeMenu(void)
 
 selection_loop:
 	while (notquit) {
-		notquit = handleMenuKeys(&focus, 2);
+		notquit = !handleMenuKeys(&focus, 2);
 
 		SDL_GetWindowSize(game.win, &game.w, &game.h);
 
@@ -243,6 +210,7 @@ selection_loop:
 	} else if (focus == 2) {
 		printf("Exit\n");
 		quitloop();
+		return;
 	} else {
 		loadPlayerTextures();
 	}
@@ -251,21 +219,21 @@ selection_loop:
 void
 drwMenu(int player)
 {
-	/* TODO: Make a exit menu */
 	quitloop();
 }
 
 static void
 loadPlayerTextures(void)
 {
-	player = (struct Player *)calloc(game.numplayers + 1, sizeof(struct Player));
+	player = (struct Player *)calloc(
+			game.numplayers + 1, sizeof(struct Player));
+
 	if (player == NULL) {
 		quitloop();
 		return;
 	}
 
 	for (int i = 0; i <= game.numplayers; i++) {
-		/* TODO Load all the frames for all the players. */
 		player[i].frame[0] = IMG_LoadTexture(game.rnd,
 				RESOURCE_PATH "/data/sprite.png");
 
@@ -290,6 +258,10 @@ loadPlayerTextures(void)
 static void
 freePlayerTextures(void)
 {
+	/* Causes segfaults if ignored */
+	if (player == NULL)
+		return;
+
 	for (int i = 0; i <= game.numplayers; i++) {
 		SDL_DestroyTexture(player[i].frame[0]);
 	}
@@ -301,15 +273,18 @@ static void
 drwPlayers(void)
 {
 	for (int i = 0; i <= game.numplayers; i++) {
-		SDL_Rect playrect = { player[i].x, player[i].y, player[i].w, player[i].h };
+		SDL_Rect playrect = {player[i].x, player[i].y,
+			player[i].w, player[i].h};
 
-		/* Draw a white square in place of unloaded texture */
+		/* Draw a white square in place of texture that failed to load */
 		if (*player[i].current == NULL) {
 			SDL_SetRenderDrawColor(game.rnd, 255, 255, 255, 255);
 			SDL_RenderFillRect(game.rnd, &playrect);
 			SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, 255);
 		} else {
-			if (SDL_RenderCopy(game.rnd, *player[i].current, NULL, &playrect) < 0) {
+			if (SDL_RenderCopy(game.rnd, *player[i].current,
+						NULL, &playrect) < 0) {
+
 				fprintf(stderr, "%s\n", SDL_GetError());
 			}
 		}
@@ -327,7 +302,6 @@ jump(int i)
 {
 	i = i > game.numplayers ? 0 : i;
 
-	/* TODO Actually implement jump and gravity */
 	if (player[i].y <= 0 || player[i].falling)
 		return;
 
@@ -345,7 +319,7 @@ right(int i)
 		return;
 
 	if (player[i].dx < 3)
-		player[i].dx += 0.5;
+		player[i].dx += 0.6;
 }
 
 void
@@ -357,7 +331,7 @@ left(int i)
 		return;
 
 	if (player[i].dx > -3)
-		player[i].dx -= 0.5;
+		player[i].dx -= 0.6;
 }
 
 static void
@@ -399,12 +373,14 @@ gravity(void)
 {
 	/* TODO Improve collision detecting so players don't clip into ground */
 	for (int i = 0; i <= game.numplayers; i++) {
+		/* TODO Move y slowly in multiple steps */
+		player[i].y += player[i].dy;
+		player[i].dy += GRAVITY;
 		if (player[i].y + player[i].h >= game.h - 20 && player[i].dy >= 0) {
 			player[i].dy = 0;
 			player[i].falling = 0;
+			player[i].y = (game.h - 20) - player[i].h;
 		}
-		player[i].y += player[i].dy;
-		player[i].dy += GRAVITY;
 	}
 }
 
@@ -413,7 +389,7 @@ movePlayers(void)
 {
 	/* TODO Check if players are colliding with each other */
 	for (int i = 0; i <= game.numplayers; i++) {
-		player[i].dx = player[i].dx * 0.99;
+		player[i].dx = player[i].dx * 0.97;
 		player[i].x += player[i].dx;
 	}
 }
