@@ -148,9 +148,9 @@ homeMenu(void)
 	bool notquit = true;
 
 	int diff = 30;
-	int ch;
-	int winwidth;
-	int winheight;
+	int ch = 0;
+	int winwidth = 0;
+	int winheight = 0;
 
 selection_loop:
 	while (notquit) {
