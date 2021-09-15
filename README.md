@@ -5,6 +5,7 @@ A small platformer game using SDL2
 ```
 c compiler*
 cairo
+sdl2
 sdl2_image
 make
 ```
