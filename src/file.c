@@ -17,16 +17,12 @@
  *  along with fuyunix.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
 #include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
 
-/*
- * XDG_STATE_HOME is better suited for save files but it's rather new and
- * not everyone knows about it
- */
 #define SAVEPATH "XDG_STATE_HOME"
 
 /* Only handles continuous comments. I use it only at the top of file */
@@ -39,53 +35,27 @@ handleComments(FILE *fp)
 }
 
 static char *
-getPath(char *xdgdir, char *file, char *altdir)
+getPath(char *xdg, char *file)
 {
-	/* FIXME The variable naming sucks */
-	char *path;
-	char *fullpath;
-	char *dir = "/fuyunix";
-
-	path = getenv(xdgdir);
-	/* TODO Improve path handling */
-	if (path == NULL) {
-		path = getenv("HOME");
-		if (path == NULL) {
-			fprintf(stderr, "HOME is not set\n");
-			return NULL;
-		}
-
-		dir = altdir;
-	}
-
 	char *dirpath;
-	size_t size = strlen(path) + strlen(dir);
-
-	dirpath = malloc(size);
-	if (dirpath == NULL) {
-		fputs("Unable to allocate memory for path\n", stderr);
-		return NULL;
-	}
-	snprintf(dirpath, size + 1, "%s%s", path, dir);
-
-	if (mkdir(dirpath, 0755) != 0)
-		if(errno != EEXIST) {
-			perror("Unable to create save directory\n");
-			free(dirpath);
-			return NULL;
+	char *dir = "/fuyunix";
+	if ((dirpath = getenv(xdg)) == NULL) {
+		if ((dirpath = getenv("HOME")) == NULL) {
+			perror("Unable to get HOME");
+			exit(1);
 		}
-
-	size = size + strlen(file);
-	fullpath = malloc(size);
-	if (fullpath == NULL) {
-		fputs("Unable to allocate memory for path\n", stderr);
-		free(dirpath);
-		return NULL;
+		dir = "/.fuyunix";
 	}
+	char *fullpath = calloc(strlen(dir) + strlen(dirpath) + strlen(file) + 1,
+			sizeof(char));
 
-	snprintf(fullpath, size + 1, "%s%s", dirpath, file);
+	strcpy(fullpath, dirpath);
+	strcat(fullpath, dir);
 
-	free(dirpath);
+	if (mkdir(fullpath, 0755) < 0 && errno != EEXIST)
+		perror("Unable to create directory");;
+
+	strcat(fullpath, file);
 
 	return fullpath;
 }
@@ -98,12 +68,14 @@ readSaveFile(void)
 	char *savepath;
 	FILE *fp;
 
-	savepath  = getPath(SAVEPATH, "/save", "/.local/state/fuyunix");
+	savepath  = getPath(SAVEPATH, "/save");
 
 	fp = fopen(savepath, "r");
 
+	/* Ignore file not existing for reading and use default values */
 	if (fp == NULL) {
 		free(savepath);
+
 		/* Default level = 1 */
 		return 1;
 	}
@@ -131,11 +103,11 @@ writeSaveFile(int level)
 	char *savepath;
 	FILE *fp;
 
-	savepath  = getPath(SAVEPATH, "/save", "/.local/state/fuyunix");
+	savepath  = getPath(SAVEPATH, "/save");
 
 	fp = fopen(savepath, "w+");
 	if (fp == NULL) {
-		fprintf(stderr, "Couldn't open savefile %s\n", savepath);
+		perror("Couldn't open savefile");
 		free(savepath);
 		return;
 	}
