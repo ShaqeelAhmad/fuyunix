@@ -200,10 +200,10 @@ selection_loop:
 	}
 
 	if (focus == 1) {
-		if (game.numplayers == 0)
-			game.numplayers = 1;
-		else
+		if (game.numplayers >= 1)
 			game.numplayers = 0;
+		else
+			game.numplayers++;
 
 		notquit = true;
 		goto selection_loop;
@@ -219,6 +219,7 @@ selection_loop:
 void
 drwMenu(int player)
 {
+	/* TODO Draw a menu */
 	quitloop();
 }
 
@@ -371,16 +372,15 @@ drwGround(void)
 static void
 gravity(void)
 {
-	/* TODO Improve collision detecting so players don't clip into ground */
 	for (int i = 0; i <= game.numplayers; i++) {
-		/* TODO Move y slowly in multiple steps */
-		player[i].y += player[i].dy;
-		player[i].dy += GRAVITY;
 		if (player[i].y + player[i].h >= game.h - 20 && player[i].dy >= 0) {
 			player[i].dy = 0;
 			player[i].falling = 0;
 			player[i].y = (game.h - 20) - player[i].h;
 		}
+
+		player[i].y += player[i].dy;
+		player[i].dy += GRAVITY;
 	}
 }
 
@@ -389,6 +389,12 @@ movePlayers(void)
 {
 	/* TODO Check if players are colliding with each other */
 	for (int i = 0; i <= game.numplayers; i++) {
+
+		if ((player[i].x <= 0 && player[i].dx < 0)
+				|| (player[i].x + player[i].w >= game.w && player[i].dx > 0))
+			player[i].dx = 0;
+
+
 		player[i].dx = player[i].dx * 0.97;
 		player[i].x += player[i].dx;
 	}
