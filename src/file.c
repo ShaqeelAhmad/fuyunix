@@ -17,22 +17,14 @@
  *  along with fuyunix.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <ctype.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 
-#define SAVEPATH "XDG_STATE_HOME"
-
-/* Only handles continuous comments. I use it only at the top of file */
-static void
-handleComments(FILE *fp)
-{
-	while (fgetc(fp) == '#') {
-		while (fgetc(fp) != '\n');
-	}
-}
+#define SAVEDIR "XDG_STATE_HOME"
 
 static char *
 getPath(char *xdg, char *file)
@@ -48,6 +40,11 @@ getPath(char *xdg, char *file)
 	}
 	char *fullpath = calloc(strlen(dir) + strlen(dirpath) + strlen(file) + 1,
 			sizeof(char));
+
+	if (fullpath == NULL) {
+		perror("Unable to allocate memory");
+		exit(1);
+	}
 
 	strcpy(fullpath, dirpath);
 	strcat(fullpath, dir);
@@ -68,55 +65,39 @@ readSaveFile(void)
 	char *savepath;
 	FILE *fp;
 
-	savepath  = getPath(SAVEPATH, "/save");
+	savepath  = getPath(SAVEDIR, "/save");
 
-	fp = fopen(savepath, "r");
+	fp = fopen(savepath, "rb");
+	free(savepath);
 
-	/* Ignore file not existing for reading and use default values */
-	if (fp == NULL) {
-		free(savepath);
+	/* File doesn't exist the first time game is run so use default value */
+	if (fp == NULL)
+		return 1; /* Default level = 1 */
 
-		/* Default level = 1 */
-		return 1;
-	}
-
-	handleComments(fp);
-
-	fscanf(fp, "%*s%d", &level);
+	fread(&level, sizeof(int), 1, fp);
 
 	fclose(fp);
-
-	free(savepath);
 
 	return level;
 }
 
-/*
- * Note: If you're writing a "real" game, you probably want to encrypt the
- * save files in some way to avoid people cheating in the game
- */
 void
 writeSaveFile(int level)
 {
-	char *comment = "# This file should not be edited manually\n"
-					"# Also I only handle comments on the top of file";
 	char *savepath;
 	FILE *fp;
 
-	savepath  = getPath(SAVEPATH, "/save");
+	savepath  = getPath(SAVEDIR, "/save");
 
-	fp = fopen(savepath, "w+");
+	fp = fopen(savepath, "wb+");
+	free(savepath);
+
 	if (fp == NULL) {
 		perror("Couldn't open savefile");
-		free(savepath);
 		return;
 	}
 
-	fprintf(fp, "%s\n", comment);
-
-	fprintf(fp, "Level %d\n", level);
+	fwrite(&level, sizeof(int), 1, fp);
 
 	fclose(fp);
-
-	free(savepath);
 }
