@@ -9,22 +9,18 @@ sdl2
 sdl2_image
 make
 ```
-\* I have only tried with tcc, gcc and clang; I mostly use tcc and might forget
-to test with gcc / clang.
-
-# Contributing
-No.
+\* Only tcc, gcc and clang are tested
 
 # Portablility
 I use Linux and can't guarantee that the program will work on other operating
 systems
 
-# Goals
-- A small map with at least 10 levels
-- Multiplayer support
+# TODO
+See [TODO](TODO)
 
-# What will NOT be added
+# Non-goals
 * Joystick / gamepad support. I don't have one to try it out.
+* Mouse support. I don't care about it.
 
 # Files
 `src/` directory contains the source code
@@ -36,7 +32,7 @@ systems
 make
 make install
 ```
-use `make CC=cc` to specify a compiler or just edit the Makefile
+use `make CC=cc` to specify a compiler or just edit the config.mk
 
 replace cc with the compiler of your choice
 
