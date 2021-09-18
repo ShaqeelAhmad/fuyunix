@@ -1,18 +1,4 @@
-CC ?= cc
-
-DIR ?= /usr/local
-
-# CFLAGS := $(shell pkg-config --cflags cairo) $(shell sdl2-config --cflags)
-# CFLAGS = `sdl2-config --cflags` `pkg-config --cflags cairo`
-
-CFLAGS != pkg-config --cflags cairo sdl2
-
-CFLAGS += -Wall -Werror -pedantic -Wextra -std=c99 -Wno-unused-parameter
-
-## Required for tcc
-CFLAGS += -DSDL_DISABLE_IMMINTRIN_H -DSDL_MAIN_HANDLED
-
-LDFLAGS = -lSDL2 -lSDL2_image -lcairo
+include ../config.mk
 
 SRC = fuyunix.c keys.c drw.c file.c
 OBJ = $(SRC:.c=.o)
