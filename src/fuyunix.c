@@ -29,8 +29,8 @@
 #include <unistd.h>
 
 #include "drw.h"
-#include "keys.h"
 #include "fuyunix.h"
+#include "keys.h"
 
 /* global variables */
 static bool quit = false;

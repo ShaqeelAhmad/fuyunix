@@ -101,3 +101,67 @@ writeSaveFile(int level)
 
 	fclose(fp);
 }
+
+char *
+readFile(char *name)
+{
+	FILE *fp = fopen(name, "r");
+
+	/* Ignore file not existing */
+	if (fp == NULL) {
+		return NULL;
+	}
+
+	fseek(fp, 0, SEEK_END);
+
+	long size = ftell(fp);
+
+	fseek(fp, 0, SEEK_SET);
+
+	char *c = calloc(size, sizeof(char));
+	if (c == NULL) {
+		perror("Unable to allocate memory");
+		exit(1);
+	}
+
+	fread(c, sizeof(char), size, fp);
+
+	fclose(fp);
+
+	return c;
+}
+
+void
+removeComments(char *buf)
+{
+	char *s = buf;
+	for (; *buf != '\0'; buf++, s++) {
+		if (*buf == '#')
+			for (; *buf != '\0' && *buf != '\n'; buf++);
+
+		*s = *buf;
+	}
+
+	*s = '\0';
+}
+
+char *
+readKeyConf(void)
+{
+	char *n = getPath("XDG_CONFIG_HOME", "/keys.conf");
+	char *c = readFile(n);
+	free(n);
+
+	if (c == NULL)
+		return NULL;
+
+	removeComments(c);
+	c = realloc(c, strlen(c));
+	if (c == NULL) {
+		perror("Unable to reallocate memory");
+		exit(1);
+	}
+
+	return c;
+}
+

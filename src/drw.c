@@ -23,12 +23,10 @@
 #include <SDL.h>
 #include <SDL_image.h>
 
-#include "fuyunix.h"
-#include "file.h"
 #include "drw.h"
-
-/* TODO Put this in a header file */
-int handleMenuKeys(int *focus, int last);
+#include "file.h"
+#include "fuyunix.h"
+#include "keys.h"
 
 #define GRAVITY 0.035f
 
@@ -100,6 +98,7 @@ init(void)
 
 	game.rnd = SDL_CreateRenderer(game.win, -1, 0);
 
+	getKeys();
 
 	initVariables();
 }
@@ -107,6 +106,8 @@ init(void)
 void
 cleanup(void)
 {
+	freeKeys();
+
 	freePlayerTextures();
 
 	writeSaveFile(game.level);
@@ -180,14 +181,12 @@ selection_loop:
 		SDL_FillRect(game.surf, &options[focus],
 				SDL_MapRGB(game.surf->format, 20, 190, 180));
 
-		/* Array required so it's treated as a string */
 		/* clang requires array to be of size 2 */
 		char nplayer[2];
 		nplayer[0] = game.numplayers + '1';
 		nplayer[1] = '\0';
 
 		/* TODO Calculate where to position text */
-		/* Note: I'll probably do it when the game is almost finished */
 		drwMenuText(NAME, 0, winheight >> 1, 64.0);
 
 		drwMenuText("Start", 10 + diff, 75 + diff + ch, 32.0);
