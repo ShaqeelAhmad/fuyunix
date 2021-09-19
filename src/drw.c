@@ -23,7 +23,7 @@
 #include <SDL.h>
 #include <SDL_image.h>
 
-#include "drw.h"
+#include "alloc.h"
 #include "file.h"
 #include "fuyunix.h"
 #include "keys.h"
@@ -225,13 +225,8 @@ drwMenu(int player)
 static void
 loadPlayerTextures(void)
 {
-	player = (struct Player *)calloc(
+	player = (struct Player *)qcalloc(
 			game.numplayers + 1, sizeof(struct Player));
-
-	if (player == NULL) {
-		quitloop();
-		return;
-	}
 
 	for (int i = 0; i <= game.numplayers; i++) {
 		player[i].frame[0] = IMG_LoadTexture(game.rnd,

@@ -1,6 +1,6 @@
 include ../config.mk
 
-SRC = fuyunix.c keys.c drw.c file.c
+SRC = fuyunix.c keys.c drw.c file.c alloc.c
 OBJ = $(SRC:.c=.o)
 
 all: fuyunix

@@ -67,13 +67,16 @@ main(int argc, char *argv[])
 	int x;
 
 	if (argc > 1) {
-		while ((x = getopt(argc, argv, "v")) != -1) {
+		while ((x = getopt(argc, argv, "vl")) != -1) {
 			if (x == 'v') {
 				puts(NAME": "VERSION);
 				return EXIT_SUCCESS;
+			} else if (x == 'l') {
+				listFunc();
+				return EXIT_SUCCESS;
 			}
 		}
-		fputs("Usage: fuyunix [-v]\n"
+		fputs("Usage: fuyunix [-v][-l]\n"
 				"Run fuyunix without any arguments to start the game\n",
 				stderr);
 		return EXIT_FAILURE;

@@ -17,8 +17,11 @@
  *  along with fuyunix.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <stdio.h>
+#include <stdlib.h>
 #include <SDL.h>
 
+#include "alloc.h"
 #include "drw.h"
 #include "file.h"
 #include "fuyunix.h"
@@ -170,11 +173,7 @@ getStr(char *c, int *i)
 	while (isalnum(c[*i]))
 			(*i)++;
 
-	char *val = calloc(1 + (*i) - prev, sizeof(char));
-	if (val == NULL) {
-		perror("Unable to allocate memory");
-		exit(1);
-	}
+	char *val = qcalloc(1 + (*i) - prev, sizeof(char));
 
 	strncpy(val,  c + prev, (*i) - prev);
 
@@ -191,11 +190,7 @@ getStrNl(char *c, int *i)
 	while (c[*i] != '\n' && c[*i] != '\0')
 			(*i)++;
 
-	char *val = calloc(1 + (*i) - prev, sizeof(char));
-	if (val == NULL) {
-		perror("Unable to allocate memory");
-		exit(1);
-	}
+	char *val = qcalloc(1 + (*i) - prev, sizeof(char));
 
 	strncpy(val,  c + prev, (*i) - prev);
 
@@ -235,11 +230,7 @@ getKey(char *c, int *size)
 			return NULL;
 		}
 
-		key = realloc(key, ((*size) + 1) * sizeof(struct Key));
-		if (key == NULL) {
-			perror("Unable to reallocate memory");
-			exit(1);
-		}
+		key = qrealloc(key, ((*size) + 1) * sizeof(struct Key));
 
 		skipWhitespace(c, &i);
 
@@ -268,11 +259,8 @@ getKey(char *c, int *size)
 void
 getKeys(void)
 {
-	keys = calloc(1, sizeof(struct Keys));
-	if (keys == NULL) {
-		perror("Unable to allocate memory");
-		exit(1);
-	}
+	keys = qcalloc(1, sizeof(struct Keys));
+
 	keys->key = NULL;
 	keys->is_key_allocated = 1;
 
@@ -296,4 +284,12 @@ freeKeys(void)
 		free(keys->key);
 	}
 	free(keys);
+}
+
+void
+listFunc(void)
+{
+	for (int i = 0; i < sizeof(funclist) / sizeof(funclist[0]); i++) {
+		printf("%s\n", funclist[i].name);
+	}
 }

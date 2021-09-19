@@ -24,6 +24,8 @@
 #include <string.h>
 #include <sys/stat.h>
 
+#include "alloc.h"
+
 #define SAVEDIR "XDG_STATE_HOME"
 
 static char *
@@ -38,13 +40,8 @@ getPath(char *xdg, char *file)
 		}
 		dir = "/.fuyunix";
 	}
-	char *fullpath = calloc(strlen(dir) + strlen(dirpath) + strlen(file) + 1,
+	char *fullpath = qcalloc(strlen(dir) + strlen(dirpath) + strlen(file) + 1,
 			sizeof(char));
-
-	if (fullpath == NULL) {
-		perror("Unable to allocate memory");
-		exit(1);
-	}
 
 	strcpy(fullpath, dirpath);
 	strcat(fullpath, dir);
@@ -115,14 +112,12 @@ readFile(char *name)
 	fseek(fp, 0, SEEK_END);
 
 	long size = ftell(fp);
+	if (size == 0)
+		return NULL;
 
 	fseek(fp, 0, SEEK_SET);
 
-	char *c = calloc(size, sizeof(char));
-	if (c == NULL) {
-		perror("Unable to allocate memory");
-		exit(1);
-	}
+	char *c = qcalloc(size, sizeof(char));
 
 	fread(c, sizeof(char), size, fp);
 
@@ -156,11 +151,7 @@ readKeyConf(void)
 		return NULL;
 
 	removeComments(c);
-	c = realloc(c, strlen(c));
-	if (c == NULL) {
-		perror("Unable to reallocate memory");
-		exit(1);
-	}
+	c =	qrealloc(c, strlen(c));
 
 	return c;
 }
