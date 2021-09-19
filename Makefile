@@ -12,7 +12,7 @@ install:
 	@cp -f man/fuyunix.6 $(MANDIR)/fuyunix.6
 	@chmod 644 $(MANDIR)/fuyunix.6
 	@mkdir -p $(DATADIR)
-	@cp -r data/ $(DATADIR)/
+	@cp -rf data/ $(DATADIR)/
 
 uninstall:
 	@$(MAKE) uninstall -C src
