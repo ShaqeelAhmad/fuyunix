@@ -3,7 +3,7 @@
 fuyunix \- a platformer game
 .SH SYNOPSIS
 .B fuyunix
-.RB [ \-v ]
+.RB [ \-v | -l ]
 .P
 .SH DESCRIPTION
 fuyunix is a platformer game with local multiplayer support.
@@ -16,19 +16,32 @@ This game will still be playable with a single user because I don't have any
 friends to play with. It will just support multiplayer on case someone wants
 to play with their friend locally.
 .SH NOTE
-When I say multiplayer I mainly mean 2 players. There might be support
-for more players but I can't confirm it.
+Multiplayer mainly means 2 player support. There might be added support for
+more players but I can't confirm it.
 .SH OPTIONS
-.RB \-v
+.TP
+.B \-v
 prints the version number
+.TP
+.B \-l
+prints the list of functions for use in key configuration file. I'm not putting
+it in a file because I'll forget to update it.
 .SH ENVIRONMENT VARIABLES
 .TP
 .B XDG_STATE_HOME
 Is used for save states
+.TP
+.B XDG_CONFIG_HOME
+Is used for configurations
+.TP
+.B HOME
+HOME/.fuyunix/ will be used if the XDG environment variables aren't set
 .SH FILES
 .TP
 .I $XDG_STATE_HOME/fuyunix/save
 Game save state
+.TP
+.I $XDG_STATE_HOME/fuyunix/keys.conf
+Key configuration file
 .P
-If the enviroment variables are not set the files will go to the default
-values.($XDG_STATE_HOME at $HOME/.local/state)
+If the enviroment variables are not set the files will be placed at HOME/.fuyunix/
