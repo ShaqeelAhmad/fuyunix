@@ -41,7 +41,7 @@ struct Key {
 
 struct Keys {
 	struct Key *key;
-	unsigned int keysize;
+	int keysize;
 	int is_key_allocated;
 };
 
@@ -91,7 +91,7 @@ getFunc(char *name)
 static void
 loopkeys(void)
 {
-	size_t i;
+	int i;
 	for (i = 0; i < keys->keysize; i++) {
 		if (keyevent->keysym.scancode == keys->key[i].key) {
 			keys->key[i].func(keys->key[i].player);
@@ -203,7 +203,7 @@ getKey(char *c, int *size)
 	struct Key *key = NULL;
 	*size = 0;
 
-	unsigned int i = 0;
+	int i = 0;
 
 	while (c[i] != '\0') {
 		int player = 0;
@@ -289,7 +289,7 @@ freeKeys(void)
 void
 listFunc(void)
 {
-	for (int i = 0; i < sizeof(funclist) / sizeof(funclist[0]); i++) {
+	for (int i = 0; i < (int)(sizeof(funclist) / sizeof(funclist[0])); i++) {
 		printf("%s\n", funclist[i].name);
 	}
 }
