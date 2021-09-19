@@ -1,7 +1,9 @@
 #ifndef _FUYUNIX_H_
 #define _FUYUNIX_H_
 
-#define VERSION "1.01"
+/* This is arbitary but will be 1 when game is finished */
+#define VERSION "0.4"
+
 #define NAME "fuyunix"
 
 void quitloop();
