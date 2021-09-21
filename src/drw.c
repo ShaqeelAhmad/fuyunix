@@ -34,6 +34,16 @@
 #define SPEED_ACCEL 1.0f
 #define FRICTION 0.88f
 
+SDL_Rect level[] = {
+
+	/* Ground */
+	{0, -1, 1000, -20},
+
+	/* Arbitary level coordinates / sizes */
+	{0, 680, 100, -100},
+	{200, 200, 100, 100},
+};
+
 /* structs */
 struct Player {
 	SDL_Texture *frame[4];
@@ -186,7 +196,6 @@ selection_loop:
 		SDL_FillRect(game.surf, &options[focus],
 				SDL_MapRGB(game.surf->format, 20, 190, 180));
 
-		/* clang requires array to be of size 2 */
 		char nplayer[2];
 		nplayer[0] = game.numplayers + '1';
 		nplayer[1] = '\0';
@@ -346,29 +355,6 @@ getSurf(void)
 }
 
 static void
-drwGround(void)
-{
-	int groundSize = 20;
-	SDL_Rect ground = {
-		0, game.h - groundSize, game.w, groundSize,
-	};
-	SDL_SetRenderDrawColor(game.rnd, 0xde, 0x8e, 0x22, 255);
-	SDL_RenderFillRect(game.rnd, &ground);
-	SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, 255);
-
-	/* Temporary test thingy */
-	/*
-	int w = 30;
-	SDL_Rect platform = {
-		(game.w >> 1) - w, game.h >> 1, w, w,
-	};
-	SDL_SetRenderDrawColor(game.rnd, 0xde, 0x8e, 0x22, 255);
-	SDL_RenderFillRect(game.rnd, &platform);
-	SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, 255);
-	*/
-}
-
-static void
 gravity(void)
 {
 	for (int i = 0; i <= game.numplayers; i++) {
@@ -388,27 +374,49 @@ movePlayers(void)
 {
 	/* TODO Check if players are colliding with each other */
 	for (int i = 0; i <= game.numplayers; i++) {
-
 		if ((player[i].x <= 0 && player[i].dx < 0)
 				|| (player[i].x + player[i].w >= game.w && player[i].dx > 0))
 			player[i].dx = 0;
 
 
-		player[i].dx = player[i].dx * 0.97;
+		player[i].dx = player[i].dx * FRICTION;
 		player[i].x += player[i].dx;
 	}
+}
+
+static void
+drwPlatforms(void)
+{
+	SDL_SetRenderDrawColor(game.rnd, 0xde, 0x8e, 0x22, 255);
+	for (int i = 0; i < (int)(sizeof(level) / sizeof(level[0])); i++) {
+		SDL_Rect l;
+		l.x = level[i].x;
+		if (level[i].y == -1)
+			l.y = game.h;
+		else
+			l.y = level[i].y;
+		l.w = level[i].w;
+		l.h = level[i].h;
+
+		SDL_RenderFillRect(game.rnd, &l);
+	}
+	SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, 255);
 }
 
 void
 drw(void)
 {
 	getSurf();
+
+	/* Change background to color: "#114394" */
+	SDL_SetRenderDrawColor(game.rnd, 0x11, 0x43, 0x94, 0x00);
+
 	SDL_RenderClear(game.rnd);
 
 	gravity();
 	movePlayers();
 
-	drwGround();
+	drwPlatforms();
 	drwPlayers();
 
 	SDL_RenderPresent(game.rnd);
