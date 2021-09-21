@@ -92,12 +92,12 @@ static void
 loopkeys(void)
 {
 	int i;
+	const Uint8 *state = SDL_GetKeyboardState(NULL);
 	for (i = 0; i < keys->keysize; i++) {
 		if (keyevent->keysym.scancode == keys->key[i].key) {
 			keys->key[i].func(keys->key[i].player);
 		}
 
-		const Uint8 *state = SDL_GetKeyboardState(NULL);
 		if (left == keys->key[i].func && state[keys->key[i].key])
 			keys->key[i].func(keys->key[i].player);
 		if (right == keys->key[i].func && state[keys->key[i].key])
@@ -136,7 +136,7 @@ handleMenuKeys(int *focus, int last)
 			case SDL_SCANCODE_RETURN:
 			case SDL_SCANCODE_SPACE:
 				return 1;
-				// gcc / clang needs default:
+				/* Default required for enum */
 			default:
 				break;
 			}
@@ -218,12 +218,11 @@ getKey(char *c, int *size)
 		}
 
 		skipWhitespace(c, &i);
-
 		func = getStr(c, &i);
-
+		skipWhitespace(c, &i);
+		keyname = getStrNl(c, &i);
 		skipWhitespace(c, &i);
 
-		keyname = getStrNl(c, &i);
 		if (func == NULL || keyname == NULL) {
 			free(keyname);
 			free(func);
@@ -231,8 +230,6 @@ getKey(char *c, int *size)
 		}
 
 		key = qrealloc(key, ((*size) + 1) * sizeof(struct Key));
-
-		skipWhitespace(c, &i);
 
 		key[*size].player = player;
 		key[*size].func = getFunc(func);
