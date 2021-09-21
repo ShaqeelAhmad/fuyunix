@@ -96,7 +96,8 @@ init(void)
 	game.win = SDL_CreateWindow(NAME, SDL_WINDOWPOS_UNDEFINED,
 			SDL_WINDOWPOS_UNDEFINED, 640, 480, 0);
 
-	game.rnd = SDL_CreateRenderer(game.win, -1, 0);
+	game.rnd = SDL_CreateRenderer(game.win, -1,
+			SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 
 	getKeys();
 
