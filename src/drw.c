@@ -28,7 +28,11 @@
 #include "fuyunix.h"
 #include "keys.h"
 
-#define GRAVITY 0.035f
+#define GRAVITY 0.65f
+#define JUMP_ACCEL 20
+#define SPEED_MAX 17
+#define SPEED_ACCEL 1.0f
+#define FRICTION 0.88f
 
 /* structs */
 struct Player {
@@ -301,7 +305,7 @@ jump(int i)
 	if (player[i].y <= 0 || player[i].falling)
 		return;
 
-	player[i].dy = -5;
+	player[i].dy = -JUMP_ACCEL;
 
 	player[i].falling = 1;
 }
@@ -314,8 +318,8 @@ right(int i)
 	if ((player[i].x + player[i].w) >= game.w)
 		return;
 
-	if (player[i].dx < 3)
-		player[i].dx += 0.6;
+	if (player[i].dx < SPEED_MAX)
+		player[i].dx += SPEED_ACCEL;
 }
 
 void
@@ -326,8 +330,8 @@ left(int i)
 	if (player[i].x <= 0)
 		return;
 
-	if (player[i].dx > -3)
-		player[i].dx -= 0.6;
+	if (player[i].dx > -SPEED_MAX)
+		player[i].dx -= SPEED_ACCEL;
 }
 
 static void
