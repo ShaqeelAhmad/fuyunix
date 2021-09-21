@@ -170,7 +170,7 @@ homeMenu(void)
 
 selection_loop:
 	while (notquit) {
-		notquit = !handleMenuKeys(&focus, 2);
+		notquit = handleMenuKeys(&focus, 2);
 
 		SDL_GetWindowSize(game.win, &game.w, &game.h);
 

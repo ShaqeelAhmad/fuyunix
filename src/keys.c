@@ -118,7 +118,7 @@ handleMenuKeys(int *focus, int last)
 		if (event.type == SDL_QUIT) {
 			quitloop();
 			*focus = last;
-			return 1;
+			return 0;
 		} else if (event.type == SDL_KEYDOWN) {
 			switch (event.key.keysym.scancode) {
 			case SDL_SCANCODE_K:
@@ -132,17 +132,17 @@ handleMenuKeys(int *focus, int last)
 			case SDL_SCANCODE_Q:
 				quitloop();
 				*focus = last;
-				return 1;
+				return 0;
 			case SDL_SCANCODE_RETURN:
 			case SDL_SCANCODE_SPACE:
-				return 1;
+				return 0;
 				/* Default required for enum */
 			default:
 				break;
 			}
 		}
 	}
-	return 0;
+	return 1;
 }
 
 void
