@@ -29,7 +29,7 @@
 #define SAVEDIR "XDG_STATE_HOME"
 
 static char *
-getPath(char *xdg, char *file)
+getPath(char *xdg, char *file, int createDir)
 {
 	char *dirpath;
 	char *dir = "/fuyunix";
@@ -46,7 +46,7 @@ getPath(char *xdg, char *file)
 	strcpy(fullpath, dirpath);
 	strcat(fullpath, dir);
 
-	if (mkdir(fullpath, 0755) < 0 && errno != EEXIST)
+	if (createDir && mkdir(fullpath, 0755) < 0 && errno != EEXIST)
 		perror("Unable to create directory");;
 
 	strcat(fullpath, file);
@@ -62,7 +62,7 @@ readSaveFile(void)
 	char *savepath;
 	FILE *fp;
 
-	savepath  = getPath(SAVEDIR, "/save");
+	savepath  = getPath(SAVEDIR, "/save", 1);
 
 	fp = fopen(savepath, "rb");
 	free(savepath);
@@ -84,7 +84,7 @@ writeSaveFile(int level)
 	char *savepath;
 	FILE *fp;
 
-	savepath  = getPath(SAVEDIR, "/save");
+	savepath  = getPath(SAVEDIR, "/save", 1);
 
 	fp = fopen(savepath, "wb+");
 	free(savepath);
@@ -143,7 +143,7 @@ removeComments(char *buf)
 char *
 readKeyConf(void)
 {
-	char *n = getPath("XDG_CONFIG_HOME", "/keys.conf");
+	char *n = getPath("XDG_CONFIG_HOME", "/keys.conf", 0);
 	char *c = readFile(n);
 	free(n);
 
