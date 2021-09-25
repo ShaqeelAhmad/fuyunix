@@ -163,8 +163,10 @@ skipWhitespace(char *c, int *i)
 char *
 getStr(char *c, int *i)
 {
-	if (!isalnum(c[*i]))
+	if (!isalnum(c[*i])) {
+		fprintf(stderr, "Unexpected character `%c`\n", c[*i]);
 		return NULL;
+	}
 
 	int prev = *i;
 
@@ -180,8 +182,10 @@ getStr(char *c, int *i)
 char *
 getStrNl(char *c, int *i)
 {
-	if (!isalnum(c[*i]))
+	if (!isalnum(c[*i])) {
+		fprintf(stderr, "Unexpected token `%c`\n", c[*i]);
 		return NULL;
+	}
 
 	int prev = *i;
 
@@ -210,22 +214,31 @@ getKey(char *c, int *size)
 		char *keyname;
 		skipWhitespace(c, &i);
 		tmp = getStr(c, &i);
-		if (tmp != NULL) {
-			player = atoi(tmp);
-			free(tmp);
-		}
-
-		skipWhitespace(c, &i);
-		func = getStr(c, &i);
-		skipWhitespace(c, &i);
-		keyname = getStrNl(c, &i);
-		skipWhitespace(c, &i);
-
-		if (func == NULL || keyname == NULL) {
-			free(keyname);
-			free(func);
+		if (tmp == NULL) {
+			free(key);
 			return NULL;
 		}
+		player = atoi(tmp);
+		free(tmp);
+
+		skipWhitespace(c, &i);
+
+		func = getStr(c, &i);
+		if (func == NULL) {
+			free(key);
+			return NULL;
+		}
+
+		skipWhitespace(c, &i);
+
+		keyname = getStrNl(c, &i);
+		if (keyname == NULL) {
+			free(func);
+			free(key);
+			return NULL;
+		}
+
+		skipWhitespace(c, &i);
 
 		key = qrealloc(key, ((*size) + 1) * sizeof(struct Key));
 
