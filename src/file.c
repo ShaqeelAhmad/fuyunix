@@ -99,15 +99,14 @@ writeSaveFile(int level)
 	fclose(fp);
 }
 
-char *
+static char *
 readFile(char *name)
 {
 	FILE *fp = fopen(name, "r");
 
 	/* Ignore file not existing */
-	if (fp == NULL) {
+	if (fp == NULL)
 		return NULL;
-	}
 
 	fseek(fp, 0, SEEK_END);
 
@@ -126,7 +125,7 @@ readFile(char *name)
 	return c;
 }
 
-void
+static void
 removeComments(char *buf)
 {
 	char *s = buf;
@@ -155,4 +154,3 @@ readKeyConf(void)
 
 	return c;
 }
-
