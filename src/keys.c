@@ -51,7 +51,7 @@ struct FuncValMap funclist[] = {
 	{ "right",        right },
 	{ "left",          left },
 	{ "quit",      quitloop },
-	{ "drwmenu",    drwMenu },
+	{ "draw menu",    drwMenu },
 };
 
 static struct Key defaultkey[] = {
@@ -288,16 +288,15 @@ getKeys(void)
 void
 freeKeys(void)
 {
-	if (keys->is_key_allocated) {
+	if (keys->is_key_allocated)
 		free(keys->key);
-	}
+
 	free(keys);
 }
 
 void
 listFunc(void)
 {
-	for (int i = 0; i < (int)(sizeof(funclist) / sizeof(funclist[0])); i++) {
+	for (int i = 0; i < (int)(sizeof(funclist) / sizeof(funclist[0])); i++)
 		printf("%s\n", funclist[i].name);
-	}
 }
