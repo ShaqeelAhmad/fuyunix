@@ -72,7 +72,6 @@ static struct Key defaultkey[] = {
 };
 
 /* Global variables */
-static SDL_KeyboardEvent *keyevent;
 struct Keys *keys;
 
 /* Functions definitions */
@@ -89,7 +88,7 @@ getFunc(char *name)
 }
 
 static void
-loopkeys(void)
+loopkeys(SDL_KeyboardEvent *keyevent)
 {
 	int i;
 	const Uint8 *state = SDL_GetKeyboardState(NULL);
@@ -146,12 +145,11 @@ handleMenuKeys(int *focus, int last)
 }
 
 void
-handleKeys(void *ptr)
+handleKeys(SDL_KeyboardEvent *keyevent)
 {
-	keyevent = ptr;
-
-	loopkeys();
+	loopkeys(keyevent);
 }
+
 void
 skipWhitespace(char *c, int *i)
 {
