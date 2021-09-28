@@ -73,6 +73,7 @@ static struct Key defaultkey[] = {
 
 /* Global variables */
 struct Keys *keys;
+unsigned int lineno;
 
 /* Functions definitions */
 FuncPtr
@@ -156,6 +157,8 @@ skipWhitespace(char *c, int *i)
 	while (c[*i] == ' ' || c[*i] == '\t' || c[*i] == '\n') {
 		if (c[*i] == '\0')
 			return;
+		else if (c[*i] == '\n')
+			lineno++;
 		(*i)++;
 	}
 }
@@ -163,8 +166,10 @@ skipWhitespace(char *c, int *i)
 char *
 getStr(char *c, int *i)
 {
+	skipWhitespace(c, i);
+
 	if (!isalnum(c[*i])) {
-		fprintf(stderr, "Unexpected character `%c`\n", c[*i]);
+		fprintf(stderr, "Unexpected character `%c` on line %d\n", c[*i], lineno);
 		return NULL;
 	}
 
@@ -182,8 +187,10 @@ getStr(char *c, int *i)
 char *
 getStrNl(char *c, int *i)
 {
+	skipWhitespace(c, i);
+
 	if (!isalnum(c[*i])) {
-		fprintf(stderr, "Unexpected token `%c`\n", c[*i]);
+		fprintf(stderr, "Unexpected token `%c` on line %d\n", c[*i], lineno);
 		return NULL;
 	}
 
@@ -205,6 +212,8 @@ getKey(char *c, int *size)
 	struct Key *key = NULL;
 	*size = 0;
 
+	lineno = 1;
+
 	int i = 0;
 
 	while (c[i] != '\0') {
@@ -212,7 +221,7 @@ getKey(char *c, int *size)
 		char *tmp;
 		char *func;
 		char *keyname;
-		skipWhitespace(c, &i);
+
 		tmp = getStr(c, &i);
 		if (tmp == NULL) {
 			free(key);
@@ -221,15 +230,11 @@ getKey(char *c, int *size)
 		player = atoi(tmp);
 		free(tmp);
 
-		skipWhitespace(c, &i);
-
 		func = getStr(c, &i);
 		if (func == NULL) {
 			free(key);
 			return NULL;
 		}
-
-		skipWhitespace(c, &i);
 
 		keyname = getStrNl(c, &i);
 		if (keyname == NULL) {
@@ -238,8 +243,6 @@ getKey(char *c, int *size)
 			return NULL;
 		}
 
-		skipWhitespace(c, &i);
-
 		key = qrealloc(key, ((*size) + 1) * sizeof(struct Key));
 
 		key[*size].player = player;
@@ -247,8 +250,8 @@ getKey(char *c, int *size)
 		key[*size].key = SDL_GetScancodeFromName(keyname);
 
 		if (key[*size].func == NULL || key[*size].key == SDL_SCANCODE_UNKNOWN) {
-			fprintf(stderr, "Invalid function `%s` or key `%s`:\nThe default"
-					"keys will be used\n", func , keyname);
+			fprintf(stderr, "Invalid function `%s` or key `%s` on line %d:\nThe default"
+					"keys will be used\n", func , keyname, lineno);
 			free(key);
 			*size = 0;
 			free(keyname);
@@ -259,6 +262,9 @@ getKey(char *c, int *size)
 		*size += 1;
 		free(keyname);
 		free(func);
+
+		/* '\0' appearing after newline */
+		skipWhitespace(c, &i);
 	}
 
 	return key;
