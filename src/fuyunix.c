@@ -68,10 +68,11 @@ main(int argc, char *argv[])
 
 	if (argc > 1) {
 		while ((x = getopt(argc, argv, "vl")) != -1) {
-			if (x == 'v') {
+			switch (x) {
+			case 'v':
 				puts(NAME": "VERSION);
 				return EXIT_SUCCESS;
-			} else if (x == 'l') {
+			case 'l':
 				listFunc();
 				return EXIT_SUCCESS;
 			}
