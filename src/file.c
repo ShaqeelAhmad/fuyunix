@@ -125,11 +125,23 @@ readFile(char *name)
 	return c;
 }
 
+static int
+isSpace(char c)
+{
+	return c == ' ' || c == '\t';
+}
+
 static void
 removeComments(char *buf)
 {
 	char *s = buf;
 	for (; *buf != '\0'; buf++, s++) {
+		if (*buf == '#' && isSpace(*(buf - 1))) {
+			buf--;
+			for (; *buf != '\0' && isSpace(*buf); buf--)
+				s--;
+			for (; *buf != '\0' && *buf != '\n'; buf++);
+		}
 		if (*buf == '#')
 			for (; *buf != '\0' && *buf != '\n'; buf++);
 
