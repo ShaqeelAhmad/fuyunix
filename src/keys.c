@@ -184,6 +184,7 @@ getStr(char *c, int *i)
 
 	return val;
 }
+
 char *
 getStrNl(char *c, int *i)
 {
@@ -207,7 +208,7 @@ getStrNl(char *c, int *i)
 }
 
 struct Key *
-getKey(char *c, int *size)
+parseKeys(char *c, int *size)
 {
 	struct Key *key = NULL;
 	*size = 0;
@@ -280,7 +281,7 @@ getKeys(void)
 
 	char *c = readKeyConf();
 	if (c != NULL)
-		keys->key = getKey(c, &keys->keysize);
+		keys->key = parseKeys(c, &keys->keysize);
 
 	free(c);
 
