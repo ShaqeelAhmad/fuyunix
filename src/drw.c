@@ -37,6 +37,7 @@
 #define CAMERA_WIDTH 100
 #define CAMERA_HEIGHT 100
 #define PLAYER_SIZE 5
+#define FRAME_NUM 4
 
 SDL_Rect level[] = {
 	/* Ground */
@@ -50,7 +51,7 @@ SDL_Rect level[] = {
 
 /* structs */
 struct Player {
-	SDL_Texture *frame[4];
+	SDL_Texture *frame[FRAME_NUM];
 	SDL_Texture **current;
 
 	double x;
@@ -276,27 +277,41 @@ drwMenu(int player)
 }
 
 static void
+loadPlayerImages(int i)
+{
+	/* string length for all of them are the same */
+	size_t size = strlen(RESOURCE_PATH "/data/0/sprite-0.png") + 1;
+
+	for (int frame = 0; frame < FRAME_NUM; frame++) {
+		char *str = qcalloc(size, sizeof(char));
+		sprintf(str, "%s%s%d%s%d%s", RESOURCE_PATH, "/data/", i, "/sprite-",
+				frame, ".png");
+
+		player[i].frame[frame] = IMG_LoadTexture(game.rnd, str);
+
+		if (player[i].frame[frame] == NULL)
+			fprintf(stderr, "Unable to Load Texture: %s\n", IMG_GetError());
+
+		free(str);
+	}
+}
+
+static void
 loadPlayerTextures(void)
 {
 	player = (struct Player *)qcalloc(
 			game.numplayers + 1, sizeof(struct Player));
 
 	for (int i = 0; i <= game.numplayers; i++) {
-		player[i].frame[0] = IMG_LoadTexture(game.rnd,
-				RESOURCE_PATH "/data/sprite.png");
+		loadPlayerImages(i);
 
-		if (player[i].frame[0] == NULL) {
-			fprintf(stderr, "Unable to Load Texture: %s\n", IMG_GetError());
-		}
+		player[i].current = &player[i].frame[0];
 
-		player[i].current = &player[0].frame[0];
-
-		player[i].x = 0;
-		player[i].y = 0;
+		player[i].x  = 0;
+		player[i].y  = 0;
 		player[i].dx = 0;
 		player[i].dy = 0;
 
-		/* Sprite is 32x32 pixels */
 		player[i].w = PLAYER_SIZE;
 		player[i].h = PLAYER_SIZE;
 	}
@@ -309,9 +324,9 @@ freePlayerTextures(void)
 	if (player == NULL)
 		return;
 
-	for (int i = 0; i <= game.numplayers; i++) {
-		SDL_DestroyTexture(player[i].frame[0]);
-	}
+	for (int i = 0; i <= game.numplayers; i++)
+		for (int frame = 0; frame < FRAME_NUM; frame++)
+			SDL_DestroyTexture(player[i].frame[frame]);
 
 	free(player);
 }
@@ -437,7 +452,7 @@ movePlayers(void)
 static void
 drwPlatforms(void)
 {
-	SDL_SetRenderDrawColor(game.rnd, 0xde, 0x8e, 0x22, 255);
+	SDL_SetRenderDrawColor(game.rnd, 0xde, 0x8e, 0x22, SDL_ALPHA_OPAQUE);
 	for (int i = 0; i < (int)(sizeof(level) / sizeof(level[0])); i++) {
 		SDL_Rect l;
 		l.x = getX(level[i].x);
@@ -457,7 +472,7 @@ drw(void)
 	getSurf();
 
 	/* Change background to color: "#114394" */
-	SDL_SetRenderDrawColor(game.rnd, 0x11, 0x43, 0x94, 0x00);
+	SDL_SetRenderDrawColor(game.rnd, 0x11, 0x43, 0x94, SDL_ALPHA_OPAQUE);
 
 	SDL_RenderClear(game.rnd);
 
