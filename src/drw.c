@@ -28,20 +28,24 @@
 #include "fuyunix.h"
 #include "keys.h"
 
-#define GRAVITY 0.65f
-#define JUMP_ACCEL 20
-#define SPEED_MAX 17
-#define SPEED_ACCEL 1.0f
+/* Constants */
+#define GRAVITY 0.055f
+#define JUMP_ACCEL 2
+#define SPEED_MAX 6
+#define SPEED_ACCEL 0.2f
 #define FRICTION 0.88f
+#define CAMERA_WIDTH 100
+#define CAMERA_HEIGHT 100
+#define PLAYER_SIZE 5
 
 SDL_Rect level[] = {
-
 	/* Ground */
-	{0, -1, 1000, -20},
+	{0, -1, 100, -2},
+	{0, 0, 1, -1},
 
 	/* Arbitary level coordinates / sizes */
-	{0, 680, 100, -100},
-	{200, 200, 100, 100},
+	{0, 8, 10, 8},
+	{3, 2, 10, 3},
 };
 
 /* structs */
@@ -55,8 +59,8 @@ struct Player {
 	double dx;
 	double dy;
 
-	int w;
-	int h;
+	double w;
+	double h;
 
 	int falling;
 };
@@ -78,10 +82,19 @@ struct Game {
 	int level;
 };
 
+struct Camera {
+	int x;
+	int y;
+	int w;
+	int h;
+	int max_x;
+	int max_y;
+};
+
 /* Global variables */
 static struct Game game;
 static struct Player *player;
-
+static struct Camera camera;
 
 /* Function declarations */
 static void freePlayerTextures();
@@ -89,6 +102,22 @@ static void loadPlayerTextures();
 
 
 /* Function definitions */
+static int
+getX(int x)
+{
+	if (x == -1)
+		return game.w;
+	return x * game.w / camera.w;
+}
+
+static int
+getY(int y)
+{
+	if (y == -1)
+		return game.h;
+	return y * game.h / camera.h;
+}
+
 static void
 initVariables()
 {
@@ -98,6 +127,16 @@ initVariables()
 
 	game.ow = 0;
 	game.oh = 0;
+
+	camera.x = 0;
+	camera.y = 0;
+	/* Use a separate coordinate system to track stuff */
+	camera.w = CAMERA_WIDTH;
+	camera.h = CAMERA_HEIGHT;
+	camera.max_x = 1000;
+
+	/* No vertical movement */
+	camera.max_y = 100;
 
 	player = NULL;
 }
@@ -258,9 +297,8 @@ loadPlayerTextures(void)
 		player[i].dy = 0;
 
 		/* Sprite is 32x32 pixels */
-		/* possibly scale according to screen size */
-		player[i].w = 32 * 2;
-		player[i].h = 32 * 2;
+		player[i].w = PLAYER_SIZE;
+		player[i].h = PLAYER_SIZE;
 	}
 }
 
@@ -282,8 +320,10 @@ static void
 drwPlayers(void)
 {
 	for (int i = 0; i <= game.numplayers; i++) {
-		SDL_Rect playrect = {player[i].x, player[i].y,
-			player[i].w, player[i].h};
+		SDL_Rect playrect = {
+			getX(player[i].x), getY(player[i].y),
+			getX(player[i].w), getY(player[i].h)
+		};
 
 		/* Draw a white square in place of texture that failed to load */
 		if (*player[i].current == NULL) {
@@ -358,10 +398,16 @@ static void
 gravity(void)
 {
 	for (int i = 0; i <= game.numplayers; i++) {
-		if (player[i].y + player[i].h >= game.h - 20 && player[i].dy >= 0) {
+		if (player[i].y + player[i].h >= camera.h - 1 && player[i].dy >= 0) {
 			player[i].dy = 0;
 			player[i].falling = 0;
-			player[i].y = (game.h - 20) - player[i].h;
+			player[i].y = (camera.h - 1) - player[i].h;
+		}
+
+		if (player[i].dy > 10) {
+			player[i].dy = 10;
+		} else if (player[i].dy < -10) {
+			player[i].dy = -10;
 		}
 
 		player[i].y += player[i].dy;
@@ -373,10 +419,14 @@ static void
 movePlayers(void)
 {
 	/* TODO Check if players are colliding with each other */
+
 	for (int i = 0; i <= game.numplayers; i++) {
 		if ((player[i].x <= 0 && player[i].dx < 0)
-				|| (player[i].x + player[i].w >= game.w && player[i].dx > 0))
+				|| (player[i].x + player[i].w >= camera.w && player[i].dx > camera.x))
 			player[i].dx = 0;
+
+		if (player[i].x > camera.w * 0.8)
+			camera.x++;
 
 
 		player[i].dx = player[i].dx * FRICTION;
@@ -390,16 +440,14 @@ drwPlatforms(void)
 	SDL_SetRenderDrawColor(game.rnd, 0xde, 0x8e, 0x22, 255);
 	for (int i = 0; i < (int)(sizeof(level) / sizeof(level[0])); i++) {
 		SDL_Rect l;
-		l.x = level[i].x;
-		if (level[i].y == -1)
-			l.y = game.h;
-		else
-			l.y = level[i].y;
-		l.w = level[i].w;
-		l.h = level[i].h;
+		l.x = getX(level[i].x);
+		l.y = getY(level[i].y);
+		l.w = getX(level[i].w);
+		l.h = getY(level[i].h);
 
 		SDL_RenderFillRect(game.rnd, &l);
 	}
+
 	SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, 255);
 }
 
@@ -413,6 +461,14 @@ drw(void)
 
 	SDL_RenderClear(game.rnd);
 
+	/*
+	 * TODO platform-player and player-player collision detection.
+	 * Move players in small steps and check collision everytime.
+	 * Use custom positioning (Maxed at 20 for y axis and 200 for x axis).
+	 * One screen can display 50 "blocks" on x and 20 "blocks" on y
+	 * Create helper functions to map custom positions to screen position.
+	 * TODO Objects line up independent of screen size
+	 */
 	gravity();
 	movePlayers();
 
