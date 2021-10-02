@@ -331,30 +331,6 @@ freePlayerTextures(void)
 	free(player);
 }
 
-static void
-drwPlayers(void)
-{
-	for (int i = 0; i <= game.numplayers; i++) {
-		SDL_Rect playrect = {
-			getX(player[i].x), getY(player[i].y),
-			getX(player[i].w), getY(player[i].h)
-		};
-
-		/* Draw a white square in place of texture that failed to load */
-		if (*player[i].current == NULL) {
-			SDL_SetRenderDrawColor(game.rnd, 255, 255, 255, 255);
-			SDL_RenderFillRect(game.rnd, &playrect);
-			SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, 255);
-		} else {
-			if (SDL_RenderCopy(game.rnd, *player[i].current,
-						NULL, &playrect) < 0) {
-
-				fprintf(stderr, "%s\n", SDL_GetError());
-			}
-		}
-	}
-}
-
 void
 down(int i)
 {
@@ -384,6 +360,8 @@ right(int i)
 
 	if (player[i].dx < SPEED_MAX)
 		player[i].dx += SPEED_ACCEL;
+
+	player[i].current = &player[i].frame[1];
 }
 
 void
@@ -396,6 +374,8 @@ left(int i)
 
 	if (player[i].dx > -SPEED_MAX)
 		player[i].dx -= SPEED_ACCEL;
+
+	player[i].current = &player[i].frame[2];
 }
 
 static void
@@ -431,6 +411,30 @@ gravity(void)
 }
 
 static void
+drwPlayers(void)
+{
+	for (int i = 0; i <= game.numplayers; i++) {
+		SDL_Rect playrect = {
+			getX(player[i].x), getY(player[i].y),
+			getX(player[i].w), getY(player[i].h)
+		};
+
+		/* Draw a white square in place of texture that failed to load */
+		if (*player[i].current == NULL) {
+			SDL_SetRenderDrawColor(game.rnd, 255, 255, 255, 255);
+			SDL_RenderFillRect(game.rnd, &playrect);
+			SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, 255);
+		} else {
+			if (SDL_RenderCopy(game.rnd, *player[i].current,
+						NULL, &playrect) < 0) {
+
+				fprintf(stderr, "%s\n", SDL_GetError());
+			}
+		}
+	}
+}
+
+static void
 movePlayers(void)
 {
 	/* TODO Check if players are colliding with each other */
@@ -440,9 +444,14 @@ movePlayers(void)
 				|| (player[i].x + player[i].w >= camera.w && player[i].dx > camera.x))
 			player[i].dx = 0;
 
-		if (player[i].x > camera.w * 0.8)
+		if (player[i].x > camera.w * 0.8) {
 			camera.x++;
+			player[i].x--;
+		}
 
+		if (player[i].dx >= -0.06 && player[i].dx <= 0.06) {
+			player[i].current = &player[i].frame[0];
+		}
 
 		player[i].dx = player[i].dx * FRICTION;
 		player[i].x += player[i].dx;
