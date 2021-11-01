@@ -136,7 +136,7 @@ handleMenuKeys(int *focus, int last)
 			case SDL_SCANCODE_RETURN:
 			case SDL_SCANCODE_SPACE:
 				return 0;
-				/* Default required for enum */
+			/* Default required for enum */
 			default:
 				break;
 			}
