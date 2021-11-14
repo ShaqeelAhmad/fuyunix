@@ -30,23 +30,22 @@
 
 /* Constants */
 #define GRAVITY 0.055f
-#define JUMP_ACCEL 2
-#define SPEED_MAX 6
-#define SPEED_ACCEL 0.2f
+#define JUMP_ACCEL 0.8f
+#define SPEED_ACCEL 0.1f
+#define SPEED_MAX 2
 #define FRICTION 0.88f
-#define CAMERA_WIDTH 100
-#define CAMERA_HEIGHT 100
-#define PLAYER_SIZE 5
-#define FRAME_NUM 4
+#define PLAYER_SIZE 1
 
-SDL_Rect level[] = {
+#define FRAME_NUM 3 /* FIXME: Temporary to avoid errors */
+
+#define VIRTUAL_WIDTH 32
+#define VIRTUAL_HEIGHT 18
+#define STAGE_LENGTH 128
+
+const SDL_Rect level[] = {
 	/* Ground */
-	{0, -1, 100, -2},
-	{0, 0, 1, -1},
-
-	/* Arbitary level coordinates / sizes */
-	{0, 8, 10, 8},
-	{3, 2, 10, 3},
+	{0, VIRTUAL_HEIGHT-1, STAGE_LENGTH, 1},
+	{0, 0, 1, 1},
 };
 
 /* structs */
@@ -79,6 +78,7 @@ struct Game {
 	int ow;
 	int oh;
 
+	double scale;
 	int numplayers;
 	int level;
 };
@@ -103,20 +103,41 @@ static void loadPlayerTextures();
 
 
 /* Function definitions */
+static double
+getScale(void)
+{
+	double h = game.h / VIRTUAL_HEIGHT;
+	double w = game.w / VIRTUAL_WIDTH;
+
+	return w < h ? w : h;
+}
+
 static int
 getX(int x)
 {
 	if (x == -1)
-		return game.w;
-	return x * game.w / camera.w;
+		return VIRTUAL_WIDTH;
+	return x * game.scale;
 }
 
 static int
 getY(int y)
 {
 	if (y == -1)
-		return game.h;
-	return y * game.h / camera.h;
+		return VIRTUAL_HEIGHT;
+	return y * game.scale;
+}
+
+static void
+getSurface(void)
+{
+	SDL_GetWindowSize(game.win, &game.w, &game.h);
+	if (game.w != game.ow || game.h != game.oh) {
+		game.ow = game.w;
+		game.oh = game.h;
+		game.surf = SDL_GetWindowSurface(game.win);
+		game.scale = getScale();
+	}
 }
 
 static void
@@ -128,16 +149,6 @@ initVariables()
 
 	game.ow = 0;
 	game.oh = 0;
-
-	camera.x = 0;
-	camera.y = 0;
-	/* Use a separate coordinate system to track stuff */
-	camera.w = CAMERA_WIDTH;
-	camera.h = CAMERA_HEIGHT;
-	camera.max_x = 1000;
-
-	/* No vertical movement */
-	camera.max_y = 100;
 
 	player = NULL;
 }
@@ -236,6 +247,7 @@ selection_loop:
 			winwidth = game.w - (diff << 1);
 			game.ow = game.w;
 			game.surf = SDL_GetWindowSurface(game.win);
+			game.scale = getScale();
 		}
 
 		SDL_Rect options[3] = {
@@ -367,7 +379,7 @@ right(int i)
 {
 	i = i > game.numplayers ? 0 : i;
 
-	if ((player[i].x + player[i].w) >= game.w)
+	if ((player[i].x + player[i].w) >= VIRTUAL_WIDTH)
 		return;
 
 	if (player[i].dx < SPEED_MAX)
@@ -391,30 +403,22 @@ left(int i)
 }
 
 static void
-getSurf(void)
-{
-	SDL_GetWindowSize(game.win, &game.w, &game.h);
-	if (game.w != game.ow || game.h != game.oh) {
-		game.ow = game.w;
-		game.oh = game.h;
-		game.surf = SDL_GetWindowSurface(game.win);
-	}
-}
-
-static void
 gravity(void)
 {
 	for (int i = 0; i <= game.numplayers; i++) {
-		if (player[i].y + player[i].h >= camera.h - 1 && player[i].dy >= 0) {
+
+		/* FIXME, Temporary workaround. Falling into the void should count as
+		 * death. This will be removed one collisions actually work well */
+		if (player[i].y + player[i].h > VIRTUAL_HEIGHT && player[i].dy >= 0) {
 			player[i].dy = 0;
 			player[i].falling = 0;
-			player[i].y = (camera.h - 1) - player[i].h;
+			player[i].y = VIRTUAL_HEIGHT - player[i].h;
 		}
 
-		if (player[i].dy > 10) {
-			player[i].dy = 10;
-		} else if (player[i].dy < -10) {
-			player[i].dy = -10;
+		if (player[i].dy > 5) {
+			player[i].dy = 5;
+		} else if (player[i].dy < -5) {
+			player[i].dy = -5;
 		}
 
 		player[i].y += player[i].dy;
@@ -427,19 +431,19 @@ drwPlayers(void)
 {
 	for (int i = 0; i <= game.numplayers; i++) {
 		SDL_Rect playrect = {
-			getX(player[i].x), getY(player[i].y),
-			getX(player[i].w), getY(player[i].h)
+			getX((int)player[i].x), getY((int)player[i].y),
+			getX((int)player[i].w), getY((int)player[i].h)
+			/* 1, (VIRTUAL_HEIGHT-1) * game.scale, 1*game.scale, 1*game.scale, */
 		};
 
-		/* Draw a white square in place of texture that failed to load */
+		/* Draw a black square in place of texture that failed to load */
 		if (*player[i].current == NULL) {
-			SDL_SetRenderDrawColor(game.rnd, 255, 255, 255, 255);
+			SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, SDL_ALPHA_OPAQUE);
 			SDL_RenderFillRect(game.rnd, &playrect);
-			SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, 255);
+			SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, SDL_ALPHA_OPAQUE);
 		} else {
-			if (SDL_RenderCopy(game.rnd, *player[i].current,
-						NULL, &playrect) < 0) {
-
+			if (SDL_RenderCopy(game.rnd, *player[i].current, NULL,
+						&playrect) < 0) {
 				fprintf(stderr, "%s\n", SDL_GetError());
 			}
 		}
@@ -453,10 +457,12 @@ movePlayers(void)
 
 	for (int i = 0; i <= game.numplayers; i++) {
 		if ((player[i].x <= 0 && player[i].dx < 0)
-				|| (player[i].x + player[i].w >= camera.w && player[i].dx > camera.x))
+				|| (player[i].x + player[i].w >= VIRTUAL_WIDTH
+					&& player[i].dx > 0)) {
 			player[i].dx = 0;
+		}
 
-		if (player[i].x > camera.w * 0.8) {
+		if (player[i].x > VIRTUAL_WIDTH * 0.8) {
 			camera.x++;
 			player[i].x--;
 		}
@@ -484,13 +490,13 @@ drwPlatforms(void)
 		SDL_RenderFillRect(game.rnd, &l);
 	}
 
-	SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, 255);
+	SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, SDL_ALPHA_OPAQUE);
 }
 
 void
 drw(void)
 {
-	getSurf();
+	getSurface();
 
 	/* Change background to color: "#114261" */
 	SDL_SetRenderDrawColor(game.rnd, 0x11, 0x41, 0x61, SDL_ALPHA_OPAQUE);
