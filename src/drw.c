@@ -145,13 +145,26 @@ initVariables()
 void
 init(void)
 {
-	SDL_Init(SDL_INIT_VIDEO);
+	if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+		fprintf(stderr, "Unable to initialize SDL: %s\n", SDL_GetError());
+		exit(-1);
+	}
 
 	game.win = SDL_CreateWindow(NAME, SDL_WINDOWPOS_UNDEFINED,
 			SDL_WINDOWPOS_UNDEFINED, 640, 480, 0);
 
+	if (game.win == NULL) {
+		fprintf(stderr, "Unable to create SDL window: %s\n", SDL_GetError());
+		exit(-1);
+	}
+
 	game.rnd = SDL_CreateRenderer(game.win, -1,
 			SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+
+	if (game.rnd == NULL) {
+		fprintf(stderr, "Unable to create SDL renderer: %s\n", SDL_GetError());
+		exit(-1);
+	}
 
 	getKeys();
 
@@ -261,7 +274,6 @@ selection_loop:
 		notquit = true;
 		goto selection_loop;
 	} else if (focus == 2) {
-		printf("Exit\n");
 		quitloop();
 		return;
 	} else {
