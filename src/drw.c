@@ -473,7 +473,7 @@ movePlayers(void)
 static void
 drwPlatforms(void)
 {
-	SDL_SetRenderDrawColor(game.rnd, 0xde, 0x8e, 0x22, SDL_ALPHA_OPAQUE);
+	SDL_SetRenderDrawColor(game.rnd, 0xed, 0xed, 0xed, SDL_ALPHA_OPAQUE);
 	for (int i = 0; i < (int)(sizeof(level) / sizeof(level[0])); i++) {
 		SDL_Rect l;
 		l.x = getX(level[i].x);
@@ -492,8 +492,8 @@ drw(void)
 {
 	getSurf();
 
-	/* Change background to color: "#114394" */
-	SDL_SetRenderDrawColor(game.rnd, 0x11, 0x43, 0x94, SDL_ALPHA_OPAQUE);
+	/* Change background to color: "#114261" */
+	SDL_SetRenderDrawColor(game.rnd, 0x11, 0x41, 0x61, SDL_ALPHA_OPAQUE);
 
 	SDL_RenderClear(game.rnd);
 
