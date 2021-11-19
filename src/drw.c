@@ -29,9 +29,9 @@
 #include "keys.h"
 
 /* Constants */
-#define GRAVITY 0.055f
-#define JUMP_ACCEL 0.8f
-#define SPEED_ACCEL 0.1f
+#define GRAVITY 0.0198f
+#define JUMP_ACCEL 0.4f
+#define SPEED_ACCEL 0.06f
 #define SPEED_MAX 2
 #define FRICTION 0.88f
 #define PLAYER_SIZE 1
@@ -43,8 +43,8 @@
 #define STAGE_LENGTH 128
 
 const SDL_Rect level[] = {
-	/* Ground */
 	{0, VIRTUAL_HEIGHT-1, STAGE_LENGTH, 1},
+	{0, 0, 1, VIRTUAL_HEIGHT},
 	{0, 0, 1, 1},
 };
 
@@ -83,19 +83,9 @@ struct Game {
 	int level;
 };
 
-struct Camera {
-	int x;
-	int y;
-	int w;
-	int h;
-	int max_x;
-	int max_y;
-};
-
 /* Global variables */
 static struct Game game;
 static struct Player *player;
-static struct Camera camera;
 
 /* Function declarations */
 static void freePlayerTextures();
@@ -463,7 +453,6 @@ movePlayers(void)
 		}
 
 		if (player[i].x > VIRTUAL_WIDTH * 0.8) {
-			camera.x++;
 			player[i].x--;
 		}
 
@@ -504,12 +493,12 @@ drw(void)
 	SDL_RenderClear(game.rnd);
 
 	/*
+	 * TODO Have more in-between frames for smoother movements.
 	 * TODO platform-player and player-player collision detection.
 	 * Move players in small steps and check collision everytime.
 	 * Use custom positioning (Maxed at 20 for y axis and 200 for x axis).
 	 * One screen can display 50 "blocks" on x and 20 "blocks" on y
 	 * Create helper functions to map custom positions to screen position.
-	 * TODO Objects line up independent of screen size
 	 */
 	gravity();
 	movePlayers();
