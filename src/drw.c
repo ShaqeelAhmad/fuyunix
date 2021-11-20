@@ -103,7 +103,7 @@ getScale(void)
 }
 
 static int
-getX(int x)
+getX(double x)
 {
 	if (x == -1)
 		return VIRTUAL_WIDTH;
@@ -111,7 +111,7 @@ getX(int x)
 }
 
 static int
-getY(int y)
+getY(double y)
 {
 	if (y == -1)
 		return VIRTUAL_HEIGHT;
@@ -421,8 +421,8 @@ drwPlayers(void)
 {
 	for (int i = 0; i <= game.numplayers; i++) {
 		SDL_Rect playrect = {
-			getX((int)player[i].x), getY((int)player[i].y),
-			getX((int)player[i].w), getY((int)player[i].h)
+			getX(player[i].x), getY(player[i].y),
+			getX(player[i].w), getY(player[i].h)
 			/* 1, (VIRTUAL_HEIGHT-1) * game.scale, 1*game.scale, 1*game.scale, */
 		};
 
@@ -471,10 +471,10 @@ drwPlatforms(void)
 	SDL_SetRenderDrawColor(game.rnd, 0xed, 0xed, 0xed, SDL_ALPHA_OPAQUE);
 	for (int i = 0; i < (int)(sizeof(level) / sizeof(level[0])); i++) {
 		SDL_Rect l;
-		l.x = getX(level[i].x);
-		l.y = getY(level[i].y);
-		l.w = getX(level[i].w);
-		l.h = getY(level[i].h);
+		l.x = getX((double)level[i].x);
+		l.y = getY((double)level[i].y);
+		l.w = getX((double)level[i].w);
+		l.h = getY((double)level[i].h);
 
 		SDL_RenderFillRect(game.rnd, &l);
 	}
@@ -493,7 +493,6 @@ drw(void)
 	SDL_RenderClear(game.rnd);
 
 	/*
-	 * TODO Have more in-between frames for smoother movements.
 	 * TODO platform-player and player-player collision detection.
 	 * Move players in small steps and check collision everytime.
 	 * Use custom positioning (Maxed at 20 for y axis and 200 for x axis).
