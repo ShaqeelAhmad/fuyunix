@@ -38,8 +38,10 @@ getPath(char *xdg, char *file, int createDir)
 			perror("Unable to get HOME");
 			exit(1);
 		}
+		/* Assume user wants it in HOME when XDG variables are not set */
 		dir = "/.fuyunix";
 	}
+
 	char *fullpath = qcalloc(strlen(dir) + strlen(dirpath) + strlen(file) + 1,
 			sizeof(char));
 
@@ -47,14 +49,13 @@ getPath(char *xdg, char *file, int createDir)
 	strcat(fullpath, dir);
 
 	if (createDir && mkdir(fullpath, 0755) < 0 && errno != EEXIST)
-		perror("Unable to create directory");;
+		perror("Unable to create directory");
 
 	strcat(fullpath, file);
 
 	return fullpath;
 }
 
-/* Only reads level number for now */
 int
 readSaveFile(void)
 {
@@ -67,9 +68,8 @@ readSaveFile(void)
 	fp = fopen(savepath, "rb");
 	free(savepath);
 
-	/* File doesn't exist the first time game is run so use default value */
 	if (fp == NULL)
-		return 1; /* Default level = 1 */
+		return 1; /* return default level, 1 */
 
 	fread(&level, sizeof(int), 1, fp);
 
@@ -91,6 +91,7 @@ writeSaveFile(int level)
 
 	if (fp == NULL) {
 		perror("Couldn't open savefile");
+		fclose(fp);
 		return;
 	}
 
@@ -104,15 +105,17 @@ readFile(char *name)
 {
 	FILE *fp = fopen(name, "r");
 
-	/* Ignore file not existing */
+	/* Ignore file not existing; config file should be created by the user */
 	if (fp == NULL)
 		return NULL;
 
 	fseek(fp, 0, SEEK_END);
 
 	long size = ftell(fp);
-	if (size == 0)
+	if (size == 0) {
+		fclose(fp);
 		return NULL;
+	}
 
 	fseek(fp, 0, SEEK_SET);
 
@@ -131,9 +134,10 @@ isSpace(char c)
 	return c == ' ' || c == '\t';
 }
 
-static void
+static int
 removeComments(char *buf)
 {
+	char *ret = buf;
 	char *s = buf;
 	for (; *buf != '\0'; buf++, s++) {
 		if (*buf == '#' && isSpace(*(buf - 1))) {
@@ -149,20 +153,22 @@ removeComments(char *buf)
 	}
 
 	*s = '\0';
+
+	return s - ret;
 }
 
 char *
 readKeyConf(void)
 {
-	char *n = getPath("XDG_CONFIG_HOME", "/keys.conf", 0);
-	char *c = readFile(n);
-	free(n);
+	char *filename = getPath("XDG_CONFIG_HOME", "/keys.conf", 0);
+	char *file = readFile(filename);
+	free(filename);
 
-	if (c == NULL)
+	if (file == NULL)
 		return NULL;
 
-	removeComments(c);
-	c =	qrealloc(c, strlen(c));
+	int len = removeComments(file);
+	file = qrealloc(file, len * sizeof(char));
 
-	return c;
+	return file;
 }
