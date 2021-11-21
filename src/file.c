@@ -158,11 +158,10 @@ removeComments(char *buf)
 }
 
 char *
-readKeyConf(void)
+readKeyConf(char **filename)
 {
-	char *filename = getPath("XDG_CONFIG_HOME", "/keys.conf", 0);
-	char *file = readFile(filename);
-	free(filename);
+	*filename = getPath("XDG_CONFIG_HOME", "/keys.conf", 0);
+	char *file = readFile(*filename);
 
 	if (file == NULL)
 		return NULL;

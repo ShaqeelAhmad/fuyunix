@@ -45,6 +45,14 @@ struct Keys {
 	int is_key_allocated;
 };
 
+struct Parser {
+	char *filename;
+	char *file;
+	char c;
+	int i;
+	int lineno;
+};
+
 struct FuncValMap funclist[] = {
 	{ "jump",          jump },
 	{ "down",          down },
@@ -73,7 +81,6 @@ static struct Key defaultkey[] = {
 
 /* Global variables */
 struct Keys *keys;
-unsigned int lineno;
 
 /* Functions definitions */
 FuncPtr
@@ -136,7 +143,7 @@ handleMenuKeys(int *focus, int last)
 			case SDL_SCANCODE_RETURN:
 			case SDL_SCANCODE_SPACE:
 				return 0;
-			/* Default required for enum */
+			/* default required for enum */
 			default:
 				break;
 			}
@@ -152,78 +159,86 @@ handleKeys(SDL_KeyboardEvent *keyevent)
 }
 
 void
-skipWhitespace(char *c, int *i)
+parserAdvance(struct Parser *p)
 {
-	while (c[*i] == ' ' || c[*i] == '\t' || c[*i] == '\n') {
-		if (c[*i] == '\0')
-			return;
-		else if (c[*i] == '\n')
-			lineno++;
-		(*i)++;
+	if (p->c != '\0')
+		p->i++;
+
+	p->c = p->file[p->i];
+}
+
+void
+skipWhitespace(struct Parser *p)
+{
+	while (p->c == ' ' || p->c == '\t' || p->c == '\n') {
+		if (p->c == '\n')
+			p->lineno++;
+
+		parserAdvance(p);
 	}
 }
 
 char *
-getStr(char *c, int *i)
+getStr(struct Parser *p)
 {
-	skipWhitespace(c, i);
+	skipWhitespace(p);
 
-	if (!isalnum(c[*i])) {
-		fprintf(stderr, "Unexpected character `%c` on line %d\n", c[*i], lineno);
+	if (!isalnum(p->c)) {
+		fprintf(stderr, "%s: Unexpected character `%c` on line %d\n",
+				p->filename, p->c, p->lineno);
 		return NULL;
 	}
 
-	int prev = *i;
+	int prev = p->i;
 
-	while (isalnum(c[*i]))
-			(*i)++;
+	while (isalnum(p->c))
+		parserAdvance(p);
 
-	char *val = qcalloc(1 + (*i) - prev, sizeof(char));
+	int size = p->i - prev;
+	char *val = qcalloc(1 + size, sizeof(char));
 
-	strncpy(val,  c + prev, (*i) - prev);
+	strncpy(val,  &p->file[prev], size);
 
 	return val;
 }
 
 char *
-getStrNl(char *c, int *i)
+getStrNl(struct Parser *p)
 {
-	skipWhitespace(c, i);
+	skipWhitespace(p);
 
-	if (!isalnum(c[*i])) {
-		fprintf(stderr, "Unexpected token `%c` on line %d\n", c[*i], lineno);
+	if (!isalnum(p->c)) {
+		fprintf(stderr, "%s: Unexpected character `%c` on line %d\n",
+				p->filename, p->c, p->lineno);
 		return NULL;
 	}
 
-	int prev = *i;
+	int prev = p->i;
 
-	while (c[*i] != '\n' && c[*i] != '\0')
-			(*i)++;
+	while (p->c != '\n' && p->c != '\0')
+		parserAdvance(p);
 
-	char *val = qcalloc(1 + (*i) - prev, sizeof(char));
+	int size = p->i - prev;
+	char *val = qcalloc(1 + size, sizeof(char));
 
-	strncpy(val,  c + prev, (*i) - prev);
+	strncpy(val,  &p->file[prev], size);
 
 	return val;
 }
 
 struct Key *
-parseKeys(char *c, int *size)
+parseKeys(struct Parser *p, int *size)
 {
 	struct Key *key = NULL;
 	*size = 0;
 
-	lineno = 1;
-
-	int i = 0;
-
-	while (c[i] != '\0') {
+	while (p->c != '\0') {
 		int player = 0;
 		char *tmp;
 		char *func;
 		char *keyname;
 
-		tmp = getStr(c, &i);
+		tmp = getStr(p);
 		if (tmp == NULL) {
 			free(key);
 			return NULL;
@@ -231,13 +246,13 @@ parseKeys(char *c, int *size)
 		player = atoi(tmp);
 		free(tmp);
 
-		func = getStr(c, &i);
+		func = getStr(p);
 		if (func == NULL) {
 			free(key);
 			return NULL;
 		}
 
-		keyname = getStrNl(c, &i);
+		keyname = getStrNl(p);
 		if (keyname == NULL) {
 			free(func);
 			free(key);
@@ -251,10 +266,12 @@ parseKeys(char *c, int *size)
 		key[*size].key = SDL_GetScancodeFromName(keyname);
 
 		if (key[*size].func == NULL || key[*size].key == SDL_SCANCODE_UNKNOWN) {
-			fprintf(stderr, "Invalid function `%s` or key `%s` on line %d:\nThe default"
-					"keys will be used\n", func , keyname, lineno);
-			free(key);
+			fprintf(stderr, "Invalid function `%s` or key `%s` on line %d:\n"
+					"The default keys will be used\n", func, keyname,
+					p->lineno);
+
 			*size = 0;
+			free(key);
 			free(keyname);
 			free(func);
 			return NULL;
@@ -264,8 +281,8 @@ parseKeys(char *c, int *size)
 		free(keyname);
 		free(func);
 
-		/* '\0' appearing after newline */
-		skipWhitespace(c, &i);
+		/* catch '\0' appearing after newline */
+		skipWhitespace(p);
 	}
 
 	return key;
@@ -275,15 +292,20 @@ void
 getKeys(void)
 {
 	keys = qcalloc(1, sizeof(struct Keys));
-
 	keys->key = NULL;
 	keys->is_key_allocated = 1;
 
-	char *c = readKeyConf();
-	if (c != NULL)
-		keys->key = parseKeys(c, &keys->keysize);
+	struct Parser p;
+	p.file = readKeyConf(&p.filename);
+	p.lineno = 1;
+	p.i = 0;
+	if (p.file != NULL) {
+		p.c = p.file[p.i];
+		keys->key = parseKeys(&p, &keys->keysize);
+	}
 
-	free(c);
+	free(p.file);
+	free(p.filename);
 
 	if (keys->key == NULL) {
 		keys->key = defaultkey;
