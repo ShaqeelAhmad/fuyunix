@@ -293,7 +293,7 @@ drwMenu(int player)
 static void
 loadPlayerImages(int i)
 {
-	/* string length for all of them are the same */
+	/* string length for all of the strings are the same */
 	size_t size = strlen(RESOURCE_PATH "/data/0/sprite-0.png") + 1;
 
 	for (int frame = 0; frame < FRAME_NUM; frame++) {
@@ -334,7 +334,7 @@ loadPlayerTextures(void)
 static void
 freePlayerTextures(void)
 {
-	/* Causes segfaults if ignored */
+	/* Causes segfaults if ignored. (this is for me) */
 	if (player == NULL)
 		return;
 
@@ -487,17 +487,17 @@ drw(void)
 {
 	getSurface();
 
+	SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, SDL_ALPHA_OPAQUE);
+	SDL_RenderClear(game.rnd);
+
 	/* Change background to color: "#114261" */
 	SDL_SetRenderDrawColor(game.rnd, 0x11, 0x41, 0x61, SDL_ALPHA_OPAQUE);
-
-	SDL_RenderClear(game.rnd);
+	SDL_Rect r = {0, 0, getX(STAGE_LENGTH), getY(VIRTUAL_HEIGHT)};
+	SDL_RenderFillRect(game.rnd, &r);
 
 	/*
 	 * TODO platform-player and player-player collision detection.
-	 * Move players in small steps and check collision everytime.
-	 * Use custom positioning (Maxed at 20 for y axis and 200 for x axis).
-	 * One screen can display 50 "blocks" on x and 20 "blocks" on y
-	 * Create helper functions to map custom positions to screen position.
+	 * Move players in small steps and to check collision.
 	 */
 	gravity();
 	movePlayers();
