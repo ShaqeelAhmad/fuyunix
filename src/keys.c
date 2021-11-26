@@ -230,7 +230,6 @@ struct Key *
 parseKeys(struct Parser *p, int *size)
 {
 	struct Key *key = NULL;
-	*size = 0;
 
 	while (p->c != '\0') {
 		int player = 0;
@@ -277,7 +276,7 @@ parseKeys(struct Parser *p, int *size)
 			return NULL;
 		}
 
-		*size += 1;
+		(*size)++;
 		free(keyname);
 		free(func);
 
@@ -294,6 +293,7 @@ getKeys(void)
 	keys = qcalloc(1, sizeof(struct Keys));
 	keys->key = NULL;
 	keys->is_key_allocated = 1;
+	keys->keysize = 0;
 
 	struct Parser p;
 	p.file = readKeyConf(&p.filename);
