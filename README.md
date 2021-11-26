@@ -17,7 +17,7 @@ I use Linux and can't guarantee that the program will work on other operating
 systems
 
 # Goals
-* Should be less than 100 MB ignoring git files and including all the assets
+* Should be less than 100 MB including all the assets
   (I doubt it'll go that far)
 * Minimal dependencies
 * Joystick / gamepad support.

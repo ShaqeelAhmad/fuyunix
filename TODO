@@ -1,8 +1,5 @@
-- Implement side scrolling
 - At least 4 sprites / frames for players
 - A small map with at least 10 levels
-- Have objects line up independent of screen size & scale objects for different
-  screen sizes. Adapt to different sizes / ratios.
 - Joystick / gamepad support. Unfortunately I don't have one to try it out.
   (Apparently there's a lot of limitations with keyboard for 2 player games,
   so joystick / gamepad support is essential to having a good experience for
