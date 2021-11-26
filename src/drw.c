@@ -45,6 +45,8 @@
 const SDL_Rect level[] = {
 	{0, VIRTUAL_HEIGHT-1, STAGE_LENGTH, 1},
 	{0, 0, 1, VIRTUAL_HEIGHT},
+	{7, 0, 1, VIRTUAL_HEIGHT},
+	{(STAGE_LENGTH / 2) - 20, (VIRTUAL_HEIGHT / 2) - 20, 20, 20},
 	{0, 0, 1, 1},
 };
 
@@ -78,6 +80,8 @@ struct Game {
 	int ow;
 	int oh;
 
+	int cam;
+
 	double scale;
 	int numplayers;
 	int level;
@@ -107,6 +111,17 @@ getX(double x)
 {
 	if (x == -1)
 		return VIRTUAL_WIDTH;
+	x -= game.cam;
+
+	return x * game.scale;
+}
+
+static int
+getW(double x)
+{
+	if (x == -1)
+		return VIRTUAL_WIDTH;
+
 	return x * game.scale;
 }
 
@@ -115,6 +130,7 @@ getY(double y)
 {
 	if (y == -1)
 		return VIRTUAL_HEIGHT;
+
 	return y * game.scale;
 }
 
@@ -139,6 +155,8 @@ initVariables()
 
 	game.ow = 0;
 	game.oh = 0;
+
+	game.cam = 0;
 
 	player = NULL;
 }
@@ -369,7 +387,7 @@ right(int i)
 {
 	i = i > game.numplayers ? 0 : i;
 
-	if ((player[i].x + player[i].w) >= VIRTUAL_WIDTH)
+	if (player[i].x + player[i].w >= STAGE_LENGTH)
 		return;
 
 	if (player[i].dx < SPEED_MAX)
@@ -422,8 +440,7 @@ drwPlayers(void)
 	for (int i = 0; i <= game.numplayers; i++) {
 		SDL_Rect playrect = {
 			getX(player[i].x), getY(player[i].y),
-			getX(player[i].w), getY(player[i].h)
-			/* 1, (VIRTUAL_HEIGHT-1) * game.scale, 1*game.scale, 1*game.scale, */
+			getW(player[i].w), getY(player[i].h)
 		};
 
 		/* Draw a black square in place of texture that failed to load */
@@ -447,13 +464,16 @@ movePlayers(void)
 
 	for (int i = 0; i <= game.numplayers; i++) {
 		if ((player[i].x <= 0 && player[i].dx < 0)
-				|| (player[i].x + player[i].w >= VIRTUAL_WIDTH
+				|| (player[i].x + player[i].w >= STAGE_LENGTH
 					&& player[i].dx > 0)) {
 			player[i].dx = 0;
 		}
 
-		if (player[i].x > VIRTUAL_WIDTH * 0.8) {
-			player[i].x--;
+		if (player[i].x - game.cam > VIRTUAL_WIDTH * 0.8) {
+			game.cam++;
+			continue;
+		} else if (player[i].x - game.cam <= VIRTUAL_WIDTH * 0.1 && game.cam != 0) {
+			game.cam--;
 		}
 
 		if (player[i].dx >= -0.06 && player[i].dx <= 0.06) {
@@ -473,7 +493,7 @@ drwPlatforms(void)
 		SDL_Rect l;
 		l.x = getX((double)level[i].x);
 		l.y = getY((double)level[i].y);
-		l.w = getX((double)level[i].w);
+		l.w = getW((double)level[i].w);
 		l.h = getY((double)level[i].h);
 
 		SDL_RenderFillRect(game.rnd, &l);
