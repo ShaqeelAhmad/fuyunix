@@ -48,8 +48,10 @@ getPath(char *xdg, char *file, int createDir)
 	strcpy(fullpath, dirpath);
 	strcat(fullpath, dir);
 
-	if (createDir && mkdir(fullpath, 0755) < 0 && errno != EEXIST)
-		perror("Unable to create directory");
+	if (createDir && mkdir(fullpath, 0755) < 0 && errno != EEXIST) {
+		fprintf(stderr, "Unable to create directory `%s`", fullpath);
+		perror(NULL);
+	}
 
 	strcat(fullpath, file);
 
@@ -87,13 +89,16 @@ writeSaveFile(int level)
 	savepath  = getPath(SAVEDIR, "/save", 1);
 
 	fp = fopen(savepath, "wb+");
-	free(savepath);
 
 	if (fp == NULL) {
-		perror("Couldn't open savefile");
+		fprintf(stderr, "Couldn't open savefile `%s`", savepath);
+		perror(NULL);
+
+		free(savepath);
 		fclose(fp);
 		return;
 	}
+	free(savepath);
 
 	fwrite(&level, sizeof(int), 1, fp);
 
