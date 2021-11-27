@@ -31,7 +31,7 @@
 /* Constants */
 #define GRAVITY 0.0198f
 #define JUMP_ACCEL 0.4f
-#define SPEED_ACCEL 0.06f
+#define SPEED_ACCEL 0.02f
 #define SPEED_MAX 2
 #define FRICTION 0.88f
 #define PLAYER_SIZE 1
@@ -446,8 +446,10 @@ movePlayers(void)
 
 		if (player[i].x - game.cam > VIRTUAL_WIDTH * 0.8) {
 			game.cam++;
-		} else if (player[i].x - game.cam <= VIRTUAL_WIDTH * 0.1 && game.cam != 0) {
+			continue;
+		} else if (player[i].x - game.cam <= VIRTUAL_WIDTH * 0.2 && game.cam != 0) {
 			game.cam--;
+			continue;
 		}
 
 		if (player[i].dx >= -0.06 && player[i].dx <= 0.06) {
