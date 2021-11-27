@@ -411,26 +411,51 @@ left(int i)
 }
 
 static void
-gravity(void)
+gravity(int i)
 {
+	/* FIXME, Temporary workaround. Falling into the void should count as
+	 * death. This will be removed one collisions actually work well */
+	if (player[i].y + player[i].h > VIRTUAL_HEIGHT && player[i].dy >= 0) {
+		player[i].dy = 0;
+		player[i].falling = 0;
+		player[i].y = VIRTUAL_HEIGHT - player[i].h;
+	}
+
+	if (player[i].dy > 5) {
+		player[i].dy = 5;
+	} else if (player[i].dy < -5) {
+		player[i].dy = -5;
+	}
+
+	player[i].y += player[i].dy;
+	player[i].dy += GRAVITY;
+}
+
+static void
+movePlayers(void)
+{
+	/* TODO Check if players are colliding with each other */
 	for (int i = 0; i <= game.numplayers; i++) {
+		gravity(i);
 
-		/* FIXME, Temporary workaround. Falling into the void should count as
-		 * death. This will be removed one collisions actually work well */
-		if (player[i].y + player[i].h > VIRTUAL_HEIGHT && player[i].dy >= 0) {
-			player[i].dy = 0;
-			player[i].falling = 0;
-			player[i].y = VIRTUAL_HEIGHT - player[i].h;
+		if ((player[i].x <= 0 && player[i].dx < 0)
+				|| (player[i].x + player[i].w >= STAGE_LENGTH
+					&& player[i].dx > 0)) {
+			player[i].dx = 0;
 		}
 
-		if (player[i].dy > 5) {
-			player[i].dy = 5;
-		} else if (player[i].dy < -5) {
-			player[i].dy = -5;
+		if (player[i].x - game.cam > VIRTUAL_WIDTH * 0.8) {
+			game.cam++;
+		} else if (player[i].x - game.cam <= VIRTUAL_WIDTH * 0.1 && game.cam != 0) {
+			game.cam--;
 		}
 
-		player[i].y += player[i].dy;
-		player[i].dy += GRAVITY;
+		if (player[i].dx >= -0.06 && player[i].dx <= 0.06) {
+			player[i].current = &player[i].frame[0];
+		}
+
+		player[i].dx = player[i].dx * FRICTION;
+		player[i].x += player[i].dx;
 	}
 }
 
@@ -454,34 +479,6 @@ drwPlayers(void)
 				fprintf(stderr, "%s\n", SDL_GetError());
 			}
 		}
-	}
-}
-
-static void
-movePlayers(void)
-{
-	/* TODO Check if players are colliding with each other */
-
-	for (int i = 0; i <= game.numplayers; i++) {
-		if ((player[i].x <= 0 && player[i].dx < 0)
-				|| (player[i].x + player[i].w >= STAGE_LENGTH
-					&& player[i].dx > 0)) {
-			player[i].dx = 0;
-		}
-
-		if (player[i].x - game.cam > VIRTUAL_WIDTH * 0.8) {
-			game.cam++;
-			continue;
-		} else if (player[i].x - game.cam <= VIRTUAL_WIDTH * 0.1 && game.cam != 0) {
-			game.cam--;
-		}
-
-		if (player[i].dx >= -0.06 && player[i].dx <= 0.06) {
-			player[i].current = &player[i].frame[0];
-		}
-
-		player[i].dx = player[i].dx * FRICTION;
-		player[i].x += player[i].dx;
 	}
 }
 
@@ -519,7 +516,6 @@ drw(void)
 	 * TODO platform-player and player-player collision detection.
 	 * Move players in small steps and to check collision.
 	 */
-	gravity();
 	movePlayers();
 
 	drwPlatforms();
