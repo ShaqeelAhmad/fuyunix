@@ -44,10 +44,9 @@
 
 const SDL_Rect level[] = {
 	{0, VIRTUAL_HEIGHT-1, STAGE_LENGTH, 1},
-	{0, 0, 1, VIRTUAL_HEIGHT},
 	{7, 0, 1, VIRTUAL_HEIGHT},
 	{(STAGE_LENGTH / 2) - 20, (VIRTUAL_HEIGHT / 2) - 20, 20, 20},
-	{0, 0, 1, 1},
+	{9, VIRTUAL_HEIGHT-2, 2, 2},
 };
 
 /* structs */
@@ -374,7 +373,7 @@ jump(int i)
 {
 	i = i > game.numplayers ? 0 : i;
 
-	if (player[i].y <= 0 || player[i].falling)
+	if (player[i].falling)
 		return;
 
 	player[i].dy = -JUMP_ACCEL;
@@ -410,31 +409,70 @@ left(int i)
 	player[i].current = &player[i].frame[2];
 }
 
+static double
+gravityCollision(int i)
+{
+	double dy = player[i].dy;
+	SDL_Rect p = {
+		(int)player[i].x,
+		(int)player[i].y + 1,
+		(int)player[i].w,
+		(int)player[i].h
+	};
+	for (int j = 0; j < (int)(sizeof(level) / sizeof(level[0])); j++) {
+		if (SDL_HasIntersection(&p, &level[j]) == SDL_TRUE) {
+			if (dy > 0) {
+				player[i].dy = 0;
+				player[i].falling = 0;
+				return level[j].y - p.h;
+			}
+		}
+	}
+	return player[i].y + dy;
+}
+
 static void
 gravity(int i)
 {
-	/* FIXME, Temporary workaround. Falling into the void should count as
-	 * death. This will be removed one collisions actually work well */
-	if (player[i].y + player[i].h > VIRTUAL_HEIGHT && player[i].dy >= 0) {
-		player[i].dy = 0;
-		player[i].falling = 0;
-		player[i].y = VIRTUAL_HEIGHT - player[i].h;
-	}
-
 	if (player[i].dy > 5) {
 		player[i].dy = 5;
 	} else if (player[i].dy < -5) {
 		player[i].dy = -5;
 	}
 
-	player[i].y += player[i].dy;
+	player[i].y = gravityCollision(i);
 	player[i].dy += GRAVITY;
+}
+
+static double
+collisionDetection(int i)
+{
+	double dx = player[i].dx;
+	SDL_Rect p = {
+		(int)player[i].x + (int)dx,
+		(int)player[i].y,
+		(int)player[i].w,
+		(int)player[i].h
+	};
+	for (int j = 0; j < (int)(sizeof(level) / sizeof(level[0])); j++) {
+		if (SDL_HasIntersection(&p, &level[j])) {
+			if (dx > 0) {
+				player[i].dx = 0;
+				return level[j].x;
+			}
+			if (dx < 0) {
+				player[i].dx = 0;
+				return level[j].x + level[j].w;
+			}
+		}
+	}
+	return player[i].x + dx;
 }
 
 static void
 movePlayers(void)
 {
-	/* TODO Check if players are colliding with each other */
+	/* TODO Player-Player collision */
 	for (int i = 0; i <= game.numplayers; i++) {
 		gravity(i);
 
@@ -452,12 +490,12 @@ movePlayers(void)
 			continue;
 		}
 
-		if (player[i].dx >= -0.06 && player[i].dx <= 0.06) {
+		if (player[i].dx >= -0.05 && player[i].dx <= 0.05) {
 			player[i].current = &player[i].frame[0];
 		}
 
 		player[i].dx = player[i].dx * FRICTION;
-		player[i].x += player[i].dx;
+		player[i].x = collisionDetection(i);
 	}
 }
 
