@@ -19,6 +19,7 @@
 
 #include <ctype.h>
 #include <errno.h>
+#include <linux/limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -29,7 +30,7 @@
 #define SAVEDIR "XDG_STATE_HOME"
 
 static char *
-getPath(char *xdg, char *file, int createDir)
+getPath(char *fullpath, char *xdg, char *file, int createDir)
 {
 	char *dirpath;
 	char *dir = "/fuyunix";
@@ -42,15 +43,12 @@ getPath(char *xdg, char *file, int createDir)
 		dir = "/.fuyunix";
 	}
 
-	char *fullpath = qcalloc(strlen(dir) + strlen(dirpath) + strlen(file) + 1,
-			sizeof(char));
-
 	strcpy(fullpath, dirpath);
 	strcat(fullpath, dir);
 
 	if (createDir && mkdir(fullpath, 0755) < 0 && errno != EEXIST) {
-		fprintf(stderr, "Unable to create directory `%s`", fullpath);
-		perror(NULL);
+		fprintf(stderr, "Unable to create directory `%s`: %s\n",
+				fullpath, strerror(errno));
 	}
 
 	strcat(fullpath, file);
@@ -62,13 +60,11 @@ int
 readSaveFile(void)
 {
 	int level;
-	char *savepath;
+	char savepath[PATH_MAX];
 	FILE *fp;
 
-	savepath  = getPath(SAVEDIR, "/save", 1);
-
+	getPath(savepath, SAVEDIR, "/save", 1);
 	fp = fopen(savepath, "rb");
-	free(savepath);
 
 	if (fp == NULL)
 		return 1; /* return default level, 1 */
@@ -83,22 +79,19 @@ readSaveFile(void)
 void
 writeSaveFile(int level)
 {
-	char *savepath;
+	char savepath[PATH_MAX];
 	FILE *fp;
 
-	savepath  = getPath(SAVEDIR, "/save", 1);
+	getPath(savepath, SAVEDIR, "/save", 1);
 
 	fp = fopen(savepath, "wb+");
 
 	if (fp == NULL) {
-		fprintf(stderr, "Couldn't open savefile `%s`", savepath);
-		perror(NULL);
-
-		free(savepath);
+		fprintf(stderr, "Couldn't open savefile `%s`: %s",
+				savepath, strerror(errno));
 		fclose(fp);
 		return;
 	}
-	free(savepath);
 
 	fwrite(&level, sizeof(int), 1, fp);
 
@@ -163,10 +156,10 @@ removeComments(char *buf)
 }
 
 char *
-readKeyConf(char **filename)
+readKeyConf(char filename[PATH_MAX])
 {
-	*filename = getPath("XDG_CONFIG_HOME", "/keys.conf", 0);
-	char *file = readFile(*filename);
+	getPath(filename, "XDG_CONFIG_HOME", "/keys.conf", 0);
+	char *file = readFile(filename);
 
 	if (file == NULL)
 		return NULL;

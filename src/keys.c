@@ -17,6 +17,7 @@
  *  along with fuyunix.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <linux/limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <SDL.h>
@@ -46,7 +47,7 @@ struct Keys {
 };
 
 struct Parser {
-	char *filename;
+	char filename[PATH_MAX];
 	char *file;
 	char c;
 	int i;
@@ -296,7 +297,7 @@ getKeys(void)
 	keys->keysize = 0;
 
 	struct Parser p;
-	p.file = readKeyConf(&p.filename);
+	p.file = readKeyConf(p.filename);
 	p.lineno = 1;
 	p.i = 0;
 	if (p.file != NULL) {
@@ -305,7 +306,6 @@ getKeys(void)
 	}
 
 	free(p.file);
-	free(p.filename);
 
 	if (keys->key == NULL) {
 		keys->key = defaultkey;
