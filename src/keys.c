@@ -54,7 +54,7 @@ struct Parser {
 	int lineno;
 };
 
-struct FuncValMap funclist[] = {
+static struct FuncValMap funclist[] = {
 	{ "jump",          jump },
 	{ "down",          down },
 	{ "right",        right },
@@ -81,10 +81,10 @@ static struct Key defaultkey[] = {
 };
 
 /* Global variables */
-struct Keys *keys;
+static struct Keys *keys;
 
 /* Functions definitions */
-FuncPtr
+static FuncPtr
 getFunc(char *name)
 {
 	size_t size = sizeof(funclist) / sizeof(funclist[0]);
@@ -159,7 +159,7 @@ handleKeys(SDL_KeyboardEvent *keyevent)
 	loopkeys(keyevent);
 }
 
-void
+static void
 parserAdvance(struct Parser *p)
 {
 	if (p->c != '\0')
@@ -168,7 +168,7 @@ parserAdvance(struct Parser *p)
 	p->c = p->file[p->i];
 }
 
-void
+static void
 skipWhitespace(struct Parser *p)
 {
 	while (p->c == ' ' || p->c == '\t' || p->c == '\n') {
@@ -179,7 +179,7 @@ skipWhitespace(struct Parser *p)
 	}
 }
 
-char *
+static char *
 getStr(struct Parser *p)
 {
 	skipWhitespace(p);
@@ -203,7 +203,7 @@ getStr(struct Parser *p)
 	return val;
 }
 
-char *
+static char *
 getStrNl(struct Parser *p)
 {
 	skipWhitespace(p);
@@ -227,7 +227,7 @@ getStrNl(struct Parser *p)
 	return val;
 }
 
-struct Key *
+static struct Key *
 parseKeys(struct Parser *p, int *size)
 {
 	struct Key *key = NULL;
