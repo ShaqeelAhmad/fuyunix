@@ -66,8 +66,13 @@ readSaveFile(void)
 	getPath(savepath, SAVEDIR, "/save", 1);
 	fp = fopen(savepath, "rb");
 
-	if (fp == NULL)
+	if (fp == NULL) {
+		if (errno == ENOENT)
+			fprintf(stderr, "Couldn't open savefile `%s`: %s\n",
+					savepath, strerror(errno));
+		fclose(fp);
 		return 1; /* return default level, 1 */
+	}
 
 	fread(&level, sizeof(int), 1, fp);
 
@@ -87,7 +92,7 @@ writeSaveFile(int level)
 	fp = fopen(savepath, "wb+");
 
 	if (fp == NULL) {
-		fprintf(stderr, "Couldn't open savefile `%s`: %s",
+		fprintf(stderr, "Couldn't open savefile `%s`: %s\n",
 				savepath, strerror(errno));
 		fclose(fp);
 		return;
@@ -114,7 +119,10 @@ readFile(char *name)
 	fseek(fp, 0, SEEK_END);
 
 	long size = ftell(fp);
-	if (size == 0) {
+	if (size <= 0) {
+		if (size < 0)
+			perror(name);
+
 		fclose(fp);
 		return NULL;
 	}
