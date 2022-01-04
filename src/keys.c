@@ -185,8 +185,8 @@ getStr(struct Parser *p)
 	skipWhitespace(p);
 
 	if (!isalnum(p->c)) {
-		fprintf(stderr, "%s: Unexpected character `%c` on line %d\n",
-				p->filename, p->c, p->lineno);
+		fprintf(stderr, "%s:%d Unexpected character `%c`(0x%X)\n",
+				p->filename, p->lineno, p->c, p->c);
 		return NULL;
 	}
 
@@ -209,8 +209,8 @@ getStrNl(struct Parser *p)
 	skipWhitespace(p);
 
 	if (!isalnum(p->c)) {
-		fprintf(stderr, "%s: Unexpected character `%c` on line %d\n",
-				p->filename, p->c, p->lineno);
+		fprintf(stderr, "%s:%d Unexpected character `%c`(0x%X)\n",
+				p->filename, p->lineno, p->c, p->c);
 		return NULL;
 	}
 
@@ -266,9 +266,9 @@ parseKeys(struct Parser *p, int *size)
 		key[*size].key = SDL_GetScancodeFromName(keyname);
 
 		if (key[*size].func == NULL || key[*size].key == SDL_SCANCODE_UNKNOWN) {
-			fprintf(stderr, "Invalid function `%s` or key `%s` on line %d:\n"
-					"The default keys will be used\n", func, keyname,
-					p->lineno);
+			fprintf(stderr, "%s:%d Invalid function `%s` or key `%s`\n"
+					"The default keys will be used\n",
+					p->filename, p->lineno, func, keyname);
 
 			*size = 0;
 			free(key);

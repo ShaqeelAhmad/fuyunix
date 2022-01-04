@@ -104,8 +104,12 @@ readFile(char *name)
 	FILE *fp = fopen(name, "r");
 
 	/* Ignore file not existing; config file should be created by the user */
-	if (fp == NULL)
+	if (fp == NULL) {
+		if (errno != ENOENT)
+			perror(name);
+
 		return NULL;
+	}
 
 	fseek(fp, 0, SEEK_END);
 
