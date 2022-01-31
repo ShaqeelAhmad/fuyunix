@@ -16,3 +16,4 @@ CFLAGS += -Wall -Werror -pedantic -Wextra -std=c99 -Wno-unused-parameter \
 CFLAGS += -DSDL_DISABLE_IMMINTRIN_H
 
 LDFLAGS != pkg-config --libs sdl2 cairo SDL2_image
+LDFLAGS +=  -lm
