@@ -18,6 +18,7 @@
  */
 
 #include <cairo.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <SDL.h>
@@ -44,7 +45,6 @@
 
 const SDL_Rect level[] = {
 	{0, VIRTUAL_HEIGHT-1, STAGE_LENGTH, 1},
-	{7, 0, 1, VIRTUAL_HEIGHT},
 	{(STAGE_LENGTH / 2) - 20, (VIRTUAL_HEIGHT / 2) - 20, 20, 20},
 	{9, VIRTUAL_HEIGHT-2, 2, 2},
 };
@@ -169,7 +169,7 @@ init(void)
 	}
 
 	game.win = SDL_CreateWindow(NAME, SDL_WINDOWPOS_UNDEFINED,
-			SDL_WINDOWPOS_UNDEFINED, 640, 480, 0);
+			SDL_WINDOWPOS_UNDEFINED, 640, 480, SDL_WINDOW_FULLSCREEN);
 
 	if (game.win == NULL) {
 		fprintf(stderr, "Unable to create SDL window: %s\n", SDL_GetError());
@@ -448,19 +448,29 @@ static double
 collisionDetection(int i)
 {
 	double dx = player[i].dx;
+
+	 /* Player isn't moving and collision detection is unnecessary */
+	if (dx == 0)
+		return player[i].x;
+
+	double (*roundFunc)(double);
+	if (dx < 0)
+		roundFunc = floor;
+	else
+		roundFunc = ceil;
+
 	SDL_Rect p = {
-		(int)player[i].x + (int)dx,
+		(int)(player[i].x + roundFunc(dx)),
 		(int)player[i].y,
 		(int)player[i].w,
 		(int)player[i].h
 	};
 	for (int j = 0; j < (int)(sizeof(level) / sizeof(level[0])); j++) {
 		if (SDL_HasIntersection(&p, &level[j])) {
-			if (dx > 0) {
+			if (dx > 0) { /* Player is going right */
 				player[i].dx = 0;
-				return level[j].x;
-			}
-			if (dx < 0) {
+				return level[j].x - player[i].w;
+			} else if (dx < 0) { /* Player is going left */
 				player[i].dx = 0;
 				return level[j].x + level[j].w;
 			}
