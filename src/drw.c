@@ -45,6 +45,7 @@
 
 const SDL_Rect level[] = {
 	{0, VIRTUAL_HEIGHT-1, STAGE_LENGTH, 1},
+	{3, VIRTUAL_HEIGHT-5, 10, 2},
 	{(STAGE_LENGTH / 2) - 20, (VIRTUAL_HEIGHT / 2) - 20, 20, 20},
 	{9, VIRTUAL_HEIGHT-2, 2, 2},
 };
@@ -246,12 +247,15 @@ selection_loop:
 		SDL_GetWindowSize(game.win, &game.w, &game.h);
 
 		if (game.h != game.oh || game.w != game.ow) {
-			ch = game.h >> 2;
-			diff = game.h >> 6;
-			winheight = ch - (diff << 1);
+			ch = game.h / 4;
+
+			/* Arbitary number to get small gaps between selections */
+			diff = game.h / 100;
+
+			winheight = ch - diff * 2;
 			game.oh = game.h;
 
-			winwidth = game.w - (diff << 1);
+			winwidth = game.w - diff * 2;
 			game.ow = game.w;
 			game.surf = SDL_GetWindowSurface(game.win);
 			game.scale = getScale();
@@ -259,8 +263,8 @@ selection_loop:
 
 		SDL_Rect options[3] = {
 			{diff, diff + ch, winwidth, winheight},
-			{diff, diff + (ch << 1), winwidth, winheight},
-			{diff, diff + (ch << 1) + ch, winwidth, winheight},
+			{diff, diff + ch * 2, winwidth, winheight},
+			{diff, diff + ch * 3, winwidth, winheight},
 		};
 
 		SDL_FillRects(game.surf, options, 3,
@@ -268,17 +272,15 @@ selection_loop:
 		SDL_FillRect(game.surf, &options[focus],
 				SDL_MapRGB(game.surf->format, 20, 190, 180));
 
-		char nplayer[2];
-		nplayer[0] = game.numplayers + '1';
-		nplayer[1] = '\0';
+		char nplayer[] = {game.numplayers + '1', '\0'};
 
-		/* TODO Calculate where to position text */
-		drwMenuText(NAME, 0, winheight >> 1, 64.0);
+		/* TODO Calculate text position it might not work for all resolutions */
+		drwMenuText(NAME, 0, winheight / 2, 64.0);
 
 		drwMenuText("Start", 10 + diff, 75 + diff + ch, 32.0);
-		drwMenuText("Choose players", 10 + diff, 75 + diff + (ch << 1), 32.0);
-		drwMenuText(nplayer, winwidth - diff, 75 + diff + (ch << 1), 32.0);
-		drwMenuText("Exit", 10 + diff, 75 + diff + (ch << 1) + ch, 32.0);
+		drwMenuText("Choose players", 10 + diff, 75 + diff + ch * 2, 32.0);
+		drwMenuText(nplayer, winwidth - diff*2, 75 + diff + ch * 2, 32.0);
+		drwMenuText("Exit", 10 + diff, 75 + diff + ch * 3, 32.0);
 
 		SDL_UpdateWindowSurface(game.win);
 		SDL_Delay(16);
@@ -413,18 +415,32 @@ static double
 gravityCollision(int i)
 {
 	double dy = player[i].dy;
+
+	/* Player isn't moving and collision detection is unnecessary */
+	if (dy == 0)
+		return player[i].y;
+
+	double (*roundFunc)(double);
+	if (dy < 0)
+		roundFunc = floor;
+	else
+		roundFunc = ceil;
+
 	SDL_Rect p = {
 		(int)player[i].x,
-		(int)player[i].y + 1,
+		(int)(player[i].y + roundFunc(dy)),
 		(int)player[i].w,
 		(int)player[i].h
 	};
 	for (int j = 0; j < (int)(sizeof(level) / sizeof(level[0])); j++) {
-		if (SDL_HasIntersection(&p, &level[j]) == SDL_TRUE) {
-			if (dy > 0) {
+		if (SDL_HasIntersection(&p, &level[j])) {
+			if (dy > 0) { /* Player is going down */
 				player[i].dy = 0;
 				player[i].falling = 0;
-				return level[j].y - p.h;
+				return level[j].y - player[i].h;
+			} else if (dy < 0) { /* Player is going up */
+				player[i].dy = 0;
+				return level[j].y + level[j].h;
 			}
 		}
 	}
@@ -449,7 +465,7 @@ collisionDetection(int i)
 {
 	double dx = player[i].dx;
 
-	 /* Player isn't moving and collision detection is unnecessary */
+	/* Player isn't moving and collision detection is unnecessary */
 	if (dx == 0)
 		return player[i].x;
 
@@ -492,6 +508,7 @@ movePlayers(void)
 			player[i].dx = 0;
 		}
 
+		/* TODO: fix the camera for 2 player mode and make scrolling smoother */
 		if (player[i].x - game.cam > VIRTUAL_WIDTH * 0.8) {
 			game.cam++;
 			continue;
@@ -562,10 +579,6 @@ drw(void)
 	SDL_Rect r = {0, 0, getX(STAGE_LENGTH), getY(VIRTUAL_HEIGHT)};
 	SDL_RenderFillRect(game.rnd, &r);
 
-	/*
-	 * TODO platform-player and player-player collision detection.
-	 * Move players in small steps and to check collision.
-	 */
 	movePlayers();
 
 	drwPlatforms();
