@@ -258,6 +258,10 @@ selection_loop:
 			winwidth = game.w - diff * 2;
 			game.ow = game.w;
 			game.surf = SDL_GetWindowSurface(game.win);
+			if (game.surf == NULL) {
+				fprintf(stderr, "Unable to get window surface: %s\n", SDL_GetError());
+				exit(-1); /* We can't do anything without the window surface */
+			}
 			game.scale = getScale();
 		}
 
@@ -267,10 +271,13 @@ selection_loop:
 			{diff, diff + ch * 3, winwidth, winheight},
 		};
 
-		SDL_FillRects(game.surf, options, 3,
-				SDL_MapRGB(game.surf->format, 20, 150, 180));
-		SDL_FillRect(game.surf, &options[focus],
-				SDL_MapRGB(game.surf->format, 20, 190, 180));
+		if (SDL_FillRects(game.surf, options, 3,
+					SDL_MapRGB(game.surf->format, 20, 150, 180)) < 0)
+			fprintf(stderr, "%s\n", SDL_GetError());
+
+		if (SDL_FillRect(game.surf, &options[focus],
+					SDL_MapRGB(game.surf->format, 20, 190, 180)) < 0)
+			fprintf(stderr, "%s\n", SDL_GetError());
 
 		char nplayer[] = {game.numplayers + '1', '\0'};
 
@@ -282,7 +289,8 @@ selection_loop:
 		drwMenuText(nplayer, winwidth - diff*2, 75 + diff + ch * 2, 32.0);
 		drwMenuText("Exit", 10 + diff, 75 + diff + ch * 3, 32.0);
 
-		SDL_UpdateWindowSurface(game.win);
+		if (SDL_UpdateWindowSurface(game.win) < 0)
+			fprintf(stderr, "%s\n", SDL_GetError());
 		SDL_Delay(16);
 	}
 
