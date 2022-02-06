@@ -162,7 +162,7 @@ initVariables()
 }
 
 void
-init(void)
+init(int winFlags)
 {
 	if (SDL_Init(SDL_INIT_VIDEO) < 0) {
 		fprintf(stderr, "Unable to initialize SDL: %s\n", SDL_GetError());
@@ -170,7 +170,7 @@ init(void)
 	}
 
 	game.win = SDL_CreateWindow(NAME, SDL_WINDOWPOS_UNDEFINED,
-			SDL_WINDOWPOS_UNDEFINED, 640, 480, SDL_WINDOW_FULLSCREEN);
+			SDL_WINDOWPOS_UNDEFINED, 640, 480, winFlags);
 
 	if (game.win == NULL) {
 		fprintf(stderr, "Unable to create SDL window: %s\n", SDL_GetError());

@@ -2,7 +2,7 @@
 #define _DRW_H_
 
 void drwMenu(int player);
-void init(void);
+void init(int winFlags);
 void cleanup(void);
 void drw(void);
 void homeMenu(void);

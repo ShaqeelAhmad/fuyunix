@@ -36,7 +36,6 @@
 static bool quit = false;
 
 /* Function definitions */
-
 void
 quitloop()
 {
@@ -65,9 +64,10 @@ int
 main(int argc, char *argv[])
 {
 	int x;
+	int flags = SDL_WINDOW_SHOWN;
 
 	if (argc > 1) {
-		while ((x = getopt(argc, argv, "vl")) != -1) {
+		while ((x = getopt(argc, argv, "vlf")) != -1) {
 			switch (x) {
 			case 'v':
 				puts(NAME": "VERSION);
@@ -75,15 +75,17 @@ main(int argc, char *argv[])
 			case 'l':
 				listFunc();
 				return EXIT_SUCCESS;
+			case 'f':
+				flags |= SDL_WINDOW_FULLSCREEN;
+				break;
+			default:
+				fputs("Usage: fuyunix [-v|-l|-f]\n", stderr);
+				return EXIT_FAILURE;
 			}
 		}
-		fputs("Usage: fuyunix [-v][-l]\n"
-				"Run fuyunix without any arguments to start the game\n",
-				stderr);
-		return EXIT_FAILURE;
 	}
 
-	init();
+	init(flags);
 
 	run();
 
