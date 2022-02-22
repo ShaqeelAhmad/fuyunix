@@ -19,7 +19,7 @@
 
 #include <ctype.h>
 #include <errno.h>
-#include <linux/limits.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -67,7 +67,7 @@ readSaveFile(void)
 	fp = fopen(savepath, "rb");
 
 	if (fp == NULL) {
-		if (errno == ENOENT)
+		if (errno != ENOENT)
 			fprintf(stderr, "Couldn't open savefile `%s`: %s\n",
 					savepath, strerror(errno));
 		fclose(fp);
@@ -150,15 +150,14 @@ removeComments(char *buf)
 	char *ret = buf;
 	char *s = buf;
 	for (; *buf != '\0'; buf++, s++) {
-		if (*buf == '#' && isSpace(*(buf - 1))) {
-			buf--;
-			for (; *buf != '\0' && isSpace(*buf); buf--)
-				s--;
+		if (*buf == '#') {
+			if (buf > ret && isSpace(*(buf-1))) {
+				buf--;
+				for (; *buf != '\0' && isSpace(*buf); buf--)
+					s--;
+			}
 			for (; *buf != '\0' && *buf != '\n'; buf++);
 		}
-		if (*buf == '#')
-			for (; *buf != '\0' && *buf != '\n'; buf++);
-
 		*s = *buf;
 	}
 
@@ -173,11 +172,15 @@ readKeyConf(char filename[PATH_MAX])
 	getPath(filename, "XDG_CONFIG_HOME", "/keys.conf", 0);
 	char *file = readFile(filename);
 
-	if (file == NULL)
-		return NULL;
+	if (file == NULL) {
+		if (errno != ENOENT)
+			fprintf(stderr, "Couldn't open file `%s`: %s\n", filename,
+					strerror(errno));
 
-	int len = removeComments(file);
-	file = qrealloc(file, len * sizeof(char));
+		return NULL;
+	}
+
+	removeComments(file);
 
 	return file;
 }
