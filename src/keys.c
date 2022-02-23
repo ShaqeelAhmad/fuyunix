@@ -17,15 +17,18 @@
  *  along with fuyunix.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include <linux/limits.h>
+#include <limits.h>
+#include <SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <SDL.h>
 
 #include "alloc.h"
 #include "drw.h"
 #include "file.h"
 #include "fuyunix.h"
+
+#define KEY_BUF 10
+#define FIELD_LEN 30 /* Should be enough for most things */
 
 typedef void (*FuncPtr)(int);
 
@@ -180,11 +183,11 @@ skipWhitespace(struct Parser *p)
 }
 
 static char *
-getStr(struct Parser *p)
+getField(char *str, struct Parser *p, int (*cmp)(int))
 {
 	skipWhitespace(p);
 
-	if (!isalnum(p->c)) {
+	if (!cmp(p->c)) {
 		fprintf(stderr, "%s:%d Unexpected character `%c`(0x%X)\n",
 				p->filename, p->lineno, p->c, p->c);
 		return NULL;
@@ -192,98 +195,104 @@ getStr(struct Parser *p)
 
 	int prev = p->i;
 
-	while (isalnum(p->c))
+	while (cmp(p->c) && p->c != '\0')
 		parserAdvance(p);
 
 	int size = p->i - prev;
-	char *val = qcalloc(1 + size, sizeof(char));
+	if (size > FIELD_LEN) {
+		fprintf(stderr, "%s:%d Field may be too long: Make sure it's at most"
+				" %d bytes\nFirst %d bytes of field: `%.*s`\n" , p->filename,
+				p->lineno, FIELD_LEN, FIELD_LEN, FIELD_LEN, p->file+prev);
+		return NULL;
+	}
 
-	strncpy(val,  &p->file[prev], size);
+	strncpy(str,  &p->file[prev], size);
 
-	return val;
+	return str;
 }
 
-static char *
-getStrNl(struct Parser *p)
+static int
+isNewline(int c)
 {
-	skipWhitespace(p);
-
-	if (!isalnum(p->c)) {
-		fprintf(stderr, "%s:%d Unexpected character `%c`(0x%X)\n",
-				p->filename, p->lineno, p->c, p->c);
-		return NULL;
-	}
-
-	int prev = p->i;
-
-	while (p->c != '\n' && p->c != '\0')
-		parserAdvance(p);
-
-	int size = p->i - prev;
-	char *val = qcalloc(1 + size, sizeof(char));
-
-	strncpy(val,  &p->file[prev], size);
-
-	return val;
+	return c != '\n';
 }
 
 static struct Key *
 parseKeys(struct Parser *p, int *size)
 {
+	struct Key keybuf[KEY_BUF];
+	size_t keybufSize = 0;
 	struct Key *key = NULL;
 
 	while (p->c != '\0') {
 		int player = 0;
-		char *tmp;
-		char *func;
-		char *keyname;
+		char playerNum[FIELD_LEN];
+		char func[FIELD_LEN];;
+		char keyname[FIELD_LEN];
+		memset(playerNum, 0, FIELD_LEN);
+		memset(func, 0, FIELD_LEN);
+		memset(keyname, 0, FIELD_LEN);
 
-		tmp = getStr(p);
-		if (tmp == NULL) {
+		char *err;
+		err = getField(playerNum, p, isalnum);
+		if (err == NULL) {
 			free(key);
 			return NULL;
 		}
-		player = atoi(tmp);
-		free(tmp);
+		player = atoi(playerNum);
 
-		func = getStr(p);
-		if (func == NULL) {
-			free(key);
-			return NULL;
-		}
-
-		keyname = getStrNl(p);
-		if (keyname == NULL) {
-			free(func);
+		err = getField(func, p, isalnum);
+		if (err == NULL) {
 			free(key);
 			return NULL;
 		}
 
-		key = qrealloc(key, ((*size) + 1) * sizeof(struct Key));
+		err = getField(keyname, p, isNewline);
+		if (err == NULL) {
+			free(key);
+			return NULL;
+		}
 
-		key[*size].player = player;
-		key[*size].func = getFunc(func);
-		key[*size].key = SDL_GetScancodeFromName(keyname);
+		/* key = qrealloc(key, ((*size) + 1) * sizeof(struct Key)); */
 
-		if (key[*size].func == NULL || key[*size].key == SDL_SCANCODE_UNKNOWN) {
-			fprintf(stderr, "%s:%d Invalid function `%s` or key `%s`\n"
-					"The default keys will be used\n",
-					p->filename, p->lineno, func, keyname);
+		keybuf[keybufSize].player = player;
+		keybuf[keybufSize].func = getFunc(func);
+		keybuf[keybufSize].key = SDL_GetScancodeFromName(keyname);
+
+		if (keybuf[keybufSize].func == NULL) {
+			fprintf(stderr, "%s:%d Invalid function `%s`\n"
+					"The default keys will be used\n", p->filename, p->lineno,
+					func);
 
 			*size = 0;
 			free(key);
-			free(keyname);
-			free(func);
+			return NULL;
+		}
+		if (keybuf[keybufSize].func == SDL_SCANCODE_UNKNOWN) {
+			fprintf(stderr, "%s:%d Invalid  key `%s`\n"
+					"The default keys will be used\n", p->filename, p->lineno,
+					keyname);
+
+			*size = 0;
+			free(key);
 			return NULL;
 		}
 
-		(*size)++;
-		free(keyname);
-		free(func);
+		keybufSize++;
+
+		if (keybufSize >= KEY_BUF) {
+			*size += keybufSize;
+			key = qrealloc(key, sizeof(struct Key) * *size);
+			memcpy(key, keybuf, sizeof(struct Key) * *size);
+			keybufSize = 0;
+		}
 
 		/* catch '\0' appearing after newline */
 		skipWhitespace(p);
 	}
+	*size += keybufSize;
+	key = qrealloc(key, sizeof(struct Key) * *size);
+	memcpy(key, keybuf, sizeof(struct Key) * *size);
 
 	return key;
 }
