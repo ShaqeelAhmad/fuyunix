@@ -18,11 +18,12 @@
  */
 
 #include <cairo.h>
+#include <limits.h>
 #include <math.h>
-#include <stdio.h>
-#include <stdbool.h>
 #include <SDL.h>
 #include <SDL_image.h>
+#include <stdbool.h>
+#include <stdio.h>
 
 #include "alloc.h"
 #include "file.h"
@@ -92,8 +93,8 @@ static struct Game game;
 static struct Player *player;
 
 /* Function declarations */
-static void freePlayerTextures();
-static void loadPlayerTextures();
+static void freePlayerTextures(void);
+static void loadPlayerTextures(void);
 
 
 /* Function definitions */
@@ -318,22 +319,32 @@ drwMenu(int player)
 }
 
 static void
+formatPath(char *path, char *resPath, int i, int frame)
+{
+	if (sprintf(path, "%s%s%d%s%d%s", resPath, "/fuyunix/data/", i,
+				"/sprite-", frame, ".png") < 0) {
+		perror("sprintf: ");
+	};
+}
+
+static void
 loadPlayerImages(int i)
 {
-	/* string length for all of the strings are the same */
-	size_t size = strlen(RESOURCE_PATH "/data/0/sprite-0.png") + 1;
-
+	char *userDir = getenv("XDG_DATA_HOME");
 	for (int frame = 0; frame < FRAME_NUM; frame++) {
-		char *str = qcalloc(size, sizeof(char));
-		sprintf(str, "%s%s%d%s%d%s", RESOURCE_PATH, "/data/", i, "/sprite-",
-				frame, ".png");
+		char path[PATH_MAX];
+		formatPath(path, userDir, i, frame);
 
-		player[i].frame[frame] = IMG_LoadTexture(game.rnd, str);
+		player[i].frame[frame] = IMG_LoadTexture(game.rnd, path);
 
-		if (player[i].frame[frame] == NULL)
-			fprintf(stderr, "Unable to Load Texture: %s\n", IMG_GetError());
+		if (player[i].frame[frame] == NULL) {
+			formatPath(path, RESOURCE_PATH, i, frame);
+			player[i].frame[frame] = IMG_LoadTexture(game.rnd, path);
 
-		free(str);
+			if (player[i].frame[frame] == NULL) {
+				fprintf(stderr, "Unable to Load Texture: %s\n", IMG_GetError());
+			}
+		}
 	}
 }
 

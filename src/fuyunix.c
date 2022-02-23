@@ -21,11 +21,11 @@
 #define _POSIX_C_SOURCE 2
 
 #include <errno.h>
+#include <SDL.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
-#include <SDL.h>
 #include <unistd.h>
 
 #include "drw.h"

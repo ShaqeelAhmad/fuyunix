@@ -1,7 +1,7 @@
 DIR = /usr/local
 MANDIR = $(DIR)/man/man6
 
-DATADIR = $(DIR)/games/fuyunix
+DATADIR = $(DIR)/games
 
 RESOURCE_PATH = $(DATADIR)
 

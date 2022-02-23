@@ -17,8 +17,7 @@ I use Linux and can't guarantee that the program will work on other operating
 systems
 
 # Goals
-* Should be less than 100 MB including all the assets
-  (I doubt it'll go that far)
+* Lightweight (so my potato pc can handle it)
 * Minimal dependencies
 * Joystick / gamepad support.
 
