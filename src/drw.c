@@ -72,8 +72,6 @@ struct Game {
 	SDL_Window *win;
 	SDL_Renderer *rnd;
 
-	SDL_Surface *surf;
-
 	int h;
 	int w;
 
@@ -135,16 +133,17 @@ getY(double y)
 	return y * game.scale;
 }
 
-static void
-getSurface(void)
+static int
+getNewWinSize(void)
 {
 	SDL_GetWindowSize(game.win, &game.w, &game.h);
 	if (game.w != game.ow || game.h != game.oh) {
 		game.ow = game.w;
 		game.oh = game.h;
-		game.surf = SDL_GetWindowSurface(game.win);
 		game.scale = getScale();
+		return 1;
 	}
+	return 0;
 }
 
 static void
@@ -207,11 +206,11 @@ cleanup(void)
 }
 
 static void
-drwMenuText(char *text, int x, int y, double size)
+drwMenuText(SDL_Surface *s, char *text, int x, int y, double size)
 {
 	cairo_surface_t *cSurface = cairo_image_surface_create_for_data(
-			(unsigned char *)game.surf->pixels, CAIRO_FORMAT_RGB24,
-			game.surf->w, game.surf->h, game.surf->pitch);
+			(unsigned char *)s->pixels, CAIRO_FORMAT_RGB24,
+			s->w, s->h, s->pitch);
 
 	cairo_t *cr = cairo_create(cSurface);
 
@@ -226,10 +225,6 @@ drwMenuText(char *text, int x, int y, double size)
 	cairo_surface_destroy(cSurface);
 }
 
-/*
- * Note: The bitshifts in this function are basically division or
- * multiplications and can be replaced with the equivalent versions
- */
 void
 homeMenu(void)
 {
@@ -241,29 +236,25 @@ homeMenu(void)
 	int winwidth = 0;
 	int winheight = 0;
 
+/* TODO: avoid rendering when nothing has changed */
 selection_loop:
 	while (notquit) {
 		notquit = handleMenuKeys(&focus, 2);
 
-		SDL_GetWindowSize(game.win, &game.w, &game.h);
-
-		if (game.h != game.oh || game.w != game.ow) {
+		if (getNewWinSize()) {
 			ch = game.h / 4;
 
 			/* Arbitary number to get small gaps between selections */
 			diff = game.h / 100;
 
 			winheight = ch - diff * 2;
-			game.oh = game.h;
-
 			winwidth = game.w - diff * 2;
-			game.ow = game.w;
-			game.surf = SDL_GetWindowSurface(game.win);
-			if (game.surf == NULL) {
-				fprintf(stderr, "Unable to get window surface: %s\n", SDL_GetError());
-				exit(-1); /* We can't do anything without the window surface */
-			}
-			game.scale = getScale();
+		}
+
+		SDL_Surface *s = SDL_CreateRGBSurface(0, game.w, game.h, 32, 0, 0, 0, 0);
+		if (s == NULL) {
+			fprintf(stderr, "SDL_CreateRGBSurface: %s\n", SDL_GetError());
+			exit(1);
 		}
 
 		SDL_Rect options[3] = {
@@ -272,27 +263,31 @@ selection_loop:
 			{diff, diff + ch * 3, winwidth, winheight},
 		};
 
-		if (SDL_FillRects(game.surf, options, 3,
-					SDL_MapRGB(game.surf->format, 20, 150, 180)) < 0)
+		if (SDL_FillRects(s, options, 3,
+					SDL_MapRGB(s->format, 20, 150, 180)) < 0)
 			fprintf(stderr, "%s\n", SDL_GetError());
 
-		if (SDL_FillRect(game.surf, &options[focus],
-					SDL_MapRGB(game.surf->format, 20, 190, 180)) < 0)
+		if (SDL_FillRect(s, &options[focus],
+					SDL_MapRGB(s->format, 20, 190, 180)) < 0)
 			fprintf(stderr, "%s\n", SDL_GetError());
 
 		char nplayer[] = {game.numplayers + '1', '\0'};
 
 		/* TODO Calculate text position it might not work for all resolutions */
-		drwMenuText(NAME, 0, winheight / 2, 64.0);
+		drwMenuText(s, NAME, 0, winheight / 2, 64.0);
 
-		drwMenuText("Start", 10 + diff, 75 + diff + ch, 32.0);
-		drwMenuText("Choose players", 10 + diff, 75 + diff + ch * 2, 32.0);
-		drwMenuText(nplayer, winwidth - diff*2, 75 + diff + ch * 2, 32.0);
-		drwMenuText("Exit", 10 + diff, 75 + diff + ch * 3, 32.0);
+		drwMenuText(s, "Start", 10 + diff, 75 + diff + ch, 32.0);
+		drwMenuText(s, "Choose players", 10 + diff, 75 + diff + ch * 2, 32.0);
+		drwMenuText(s, nplayer, winwidth - diff*2, 75 + diff + ch * 2, 32.0);
+		drwMenuText(s, "Exit", 10 + diff, 75 + diff + ch * 3, 32.0);
 
-		if (SDL_UpdateWindowSurface(game.win) < 0)
-			fprintf(stderr, "%s\n", SDL_GetError());
-		SDL_Delay(16);
+		SDL_Texture *t = SDL_CreateTextureFromSurface(game.rnd, s);
+		SDL_FreeSurface(s);
+
+		SDL_RenderCopy(game.rnd, t, NULL, NULL);
+		SDL_DestroyTexture(t);
+
+		SDL_RenderPresent(game.rnd);
 	}
 
 	if (focus == 1) {
@@ -306,9 +301,8 @@ selection_loop:
 	} else if (focus == 2) {
 		quitloop();
 		return;
-	} else {
-		loadPlayerTextures();
 	}
+	loadPlayerTextures();
 }
 
 void
@@ -588,7 +582,7 @@ drwPlatforms(void)
 void
 drw(void)
 {
-	getSurface();
+	getNewWinSize();
 
 	SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, SDL_ALPHA_OPAQUE);
 	SDL_RenderClear(game.rnd);
