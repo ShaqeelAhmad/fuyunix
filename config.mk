@@ -1,5 +1,5 @@
 DIR = /usr/local
-MANDIR = $(DIR)/man/man6
+MANDIR = $(DIR)/share/man/man6
 
 DATADIR = $(DIR)/games
 
