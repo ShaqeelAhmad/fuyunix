@@ -5,7 +5,7 @@ void drwMenu(int player);
 void init(int winFlags);
 void cleanup(void);
 void drw(void);
-void drwHomeMenu(void);
+void handleHomeMenu(void);
 
 void left(int i);
 void right(int i);

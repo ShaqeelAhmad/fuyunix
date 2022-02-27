@@ -151,11 +151,10 @@ removeComments(char *buf)
 	char *s = buf;
 	for (; *buf != '\0'; buf++, s++) {
 		if (*buf == '#') {
-			if (buf > ret && isSpace(*(buf-1))) {
-				buf--;
-				for (; *buf != '\0' && isSpace(*buf); buf--)
-					s--;
-			}
+			if (buf > ret && isSpace(*(buf-1)))
+				/* Handle spaces before a comment because newline is used to
+				 * get the last field */
+				for (buf--; *buf != '\0' && isSpace(*buf); buf--, s--);
 			for (; *buf != '\0' && *buf != '\n'; buf++);
 		}
 		*s = *buf;

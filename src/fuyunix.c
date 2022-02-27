@@ -45,7 +45,7 @@ quitloop()
 static void
 run(void)
 {
-	drwHomeMenu();
+	handleHomeMenu();
 
 	SDL_Event event;
 
@@ -64,7 +64,7 @@ int
 main(int argc, char *argv[])
 {
 	int x;
-	int flags = SDL_WINDOW_SHOWN;
+	int flags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
 
 	if (argc > 1) {
 		while ((x = getopt(argc, argv, "vlf")) != -1) {

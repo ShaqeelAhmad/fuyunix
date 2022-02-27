@@ -40,7 +40,7 @@
 
 #define FRAME_NUM 3 /* FIXME: Temporary to avoid errors */
 
-#define VIRTUAL_WIDTH 32
+#define VIRTUAL_WIDTH 16
 #define VIRTUAL_HEIGHT 18
 #define STAGE_LENGTH 128
 
@@ -226,80 +226,84 @@ drwMenuText(SDL_Surface *s, char *text, int x, int y, double size)
 }
 
 void
-drwHomeMenu(void)
+drwHomeMenu(int gaps, int focus, int size, int width, int height)
 {
-	int focus = 0;
-	bool notSelected = true;
-	int diff = 30;
-	int ch = 0;
-	int winwidth = 0;
-	int winheight = 0;
-
-/* TODO: avoid rendering when nothing has changed */
-selection_loop:
-	while (notSelected) {
-		notSelected = handleMenuKeys(&focus, 2);
-		if (getNewWinSize()) {
-			ch = game.h / 4;
-
-			/* Arbitary number to get small gaps between selections */
-			diff = game.h / 100;
-
-			winheight = ch - diff * 2;
-			winwidth = game.w - diff * 2;
-		}
-
-		SDL_Surface *s = SDL_CreateRGBSurface(0, game.w, game.h, 32, 0, 0, 0, 0);
-		if (s == NULL) {
-			fprintf(stderr, "SDL_CreateRGBSurface: %s\n", SDL_GetError());
-			exit(1);
-		}
-
-		SDL_Rect options[3] = {
-			{diff, diff + ch, winwidth, winheight},
-			{diff, diff + ch * 2, winwidth, winheight},
-			{diff, diff + ch * 3, winwidth, winheight},
-		};
-
-		if (SDL_FillRects(s, options, 3,
-					SDL_MapRGB(s->format, 20, 150, 180)) < 0)
-			fprintf(stderr, "%s\n", SDL_GetError());
-
-		if (SDL_FillRect(s, &options[focus],
-					SDL_MapRGB(s->format, 20, 190, 180)) < 0)
-			fprintf(stderr, "%s\n", SDL_GetError());
-
-		char nplayer[] = {game.numplayers + '1', '\0'};
-
-		/* TODO Calculate text position it might not work for all resolutions */
-		drwMenuText(s, NAME, 0, winheight / 2, 64.0);
-
-		double size = 32.0;
-		drwMenuText(s, "Start", 10 + diff, 75 + diff + ch, size);
-		drwMenuText(s, "Choose players", 10 + diff, 75 + diff + ch * 2, size);
-		drwMenuText(s, nplayer, winwidth - diff*2, 75 + diff + ch * 2, size);
-		drwMenuText(s, "Exit", 10 + diff, 75 + diff + ch * 3, size);
-
-		SDL_Texture *t = SDL_CreateTextureFromSurface(game.rnd, s);
-		SDL_FreeSurface(s);
-
-		SDL_RenderCopy(game.rnd, t, NULL, NULL);
-		SDL_DestroyTexture(t);
-
-		SDL_RenderPresent(game.rnd);
+	SDL_Surface *s = SDL_CreateRGBSurface(0, game.w, game.h, 32, 0, 0, 0, 0);
+	if (s == NULL) {
+		fprintf(stderr, "SDL_CreateRGBSurface: %s\n", SDL_GetError());
+		exit(1);
 	}
+	SDL_Rect options[3] = {
+		{gaps, gaps + size, width, height},
+		{gaps, gaps + size * 2, width, height},
+		{gaps, gaps + size * 3, width, height},
+	};
 
-	if (focus == 1) {
-		if (game.numplayers >= 1)
-			game.numplayers = 0;
-		else
-			game.numplayers++;
+	if (SDL_FillRects(s, options, 3,
+				SDL_MapRGB(s->format, 20, 150, 180)) < 0)
+		fprintf(stderr, "%s\n", SDL_GetError());
 
-		notSelected = true;
-		goto selection_loop;
-	} else if (focus == 2) {
-		quitloop();
-		return;
+	if (SDL_FillRect(s, &options[focus],
+				SDL_MapRGB(s->format, 20, 190, 180)) < 0)
+		fprintf(stderr, "%s\n", SDL_GetError());
+
+	char nplayer[] = {game.numplayers + '1', '\0'};
+
+	double textSize = 32.0;
+	double offset = height / 2;
+	drwMenuText(s, NAME, gaps*2, offset, textSize*2);
+
+	offset += gaps;
+	drwMenuText(s, "Start", gaps * 2, offset + size, textSize);
+	drwMenuText(s, "Choose players", gaps * 2, offset + size * 2, textSize);
+	drwMenuText(s, nplayer, width - gaps * 2, offset + size * 2, textSize);
+	drwMenuText(s, "Exit", gaps*2, offset + size * 3, textSize);
+
+	SDL_Texture *t = SDL_CreateTextureFromSurface(game.rnd, s);
+	SDL_FreeSurface(s);
+
+	SDL_RenderCopy(game.rnd, t, NULL, NULL);
+	SDL_DestroyTexture(t);
+
+	SDL_RenderPresent(game.rnd);
+}
+
+void
+handleHomeMenu(void)
+{
+	bool notSelected = true;
+	int focus = 0;
+	int gaps = 0;
+	int sectionSize = 0;
+	int sectionWidth = 0;
+	int sectionHeight = 0;
+
+	while (1) {
+		while (notSelected) {
+			notSelected = handleMenuKeys(&focus, 2);
+			if (getNewWinSize()) {
+				sectionSize = game.h / 4;
+
+				/* Arbitary number to get small gaps between selections */
+				gaps = game.h / 100;
+				sectionHeight = sectionSize - gaps * 2;
+				sectionWidth = game.w - gaps * 2;
+			}
+			drwHomeMenu(gaps, focus, sectionSize, sectionWidth, sectionHeight);
+		}
+		if (focus == 1) {
+			if (game.numplayers >= 1)
+				game.numplayers = 0;
+			else
+				game.numplayers++;
+
+			notSelected = true;
+		} else if (focus == 2) {
+			quitloop();
+			return;
+		} else {
+			break;
+		}
 	}
 	loadPlayerTextures();
 }
@@ -335,7 +339,8 @@ loadPlayerImages(int i)
 			player[i].frame[frame] = IMG_LoadTexture(game.rnd, path);
 
 			if (player[i].frame[frame] == NULL) {
-				fprintf(stderr, "Unable to Load Texture: %s\n", IMG_GetError());
+				fprintf(stderr, "Unable to Load Texture: %s\n",
+						IMG_GetError());
 			}
 		}
 	}
