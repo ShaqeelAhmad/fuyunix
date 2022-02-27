@@ -45,7 +45,7 @@ quitloop()
 static void
 run(void)
 {
-	homeMenu();
+	drwHomeMenu();
 
 	SDL_Event event;
 

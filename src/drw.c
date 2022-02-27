@@ -226,11 +226,10 @@ drwMenuText(SDL_Surface *s, char *text, int x, int y, double size)
 }
 
 void
-homeMenu(void)
+drwHomeMenu(void)
 {
 	int focus = 0;
-	bool notquit = true;
-
+	bool notSelected = true;
 	int diff = 30;
 	int ch = 0;
 	int winwidth = 0;
@@ -238,9 +237,8 @@ homeMenu(void)
 
 /* TODO: avoid rendering when nothing has changed */
 selection_loop:
-	while (notquit) {
-		notquit = handleMenuKeys(&focus, 2);
-
+	while (notSelected) {
+		notSelected = handleMenuKeys(&focus, 2);
 		if (getNewWinSize()) {
 			ch = game.h / 4;
 
@@ -276,10 +274,11 @@ selection_loop:
 		/* TODO Calculate text position it might not work for all resolutions */
 		drwMenuText(s, NAME, 0, winheight / 2, 64.0);
 
-		drwMenuText(s, "Start", 10 + diff, 75 + diff + ch, 32.0);
-		drwMenuText(s, "Choose players", 10 + diff, 75 + diff + ch * 2, 32.0);
-		drwMenuText(s, nplayer, winwidth - diff*2, 75 + diff + ch * 2, 32.0);
-		drwMenuText(s, "Exit", 10 + diff, 75 + diff + ch * 3, 32.0);
+		double size = 32.0;
+		drwMenuText(s, "Start", 10 + diff, 75 + diff + ch, size);
+		drwMenuText(s, "Choose players", 10 + diff, 75 + diff + ch * 2, size);
+		drwMenuText(s, nplayer, winwidth - diff*2, 75 + diff + ch * 2, size);
+		drwMenuText(s, "Exit", 10 + diff, 75 + diff + ch * 3, size);
 
 		SDL_Texture *t = SDL_CreateTextureFromSurface(game.rnd, s);
 		SDL_FreeSurface(s);
@@ -296,7 +295,7 @@ selection_loop:
 		else
 			game.numplayers++;
 
-		notquit = true;
+		notSelected = true;
 		goto selection_loop;
 	} else if (focus == 2) {
 		quitloop();

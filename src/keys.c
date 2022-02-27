@@ -27,19 +27,17 @@
 #include "file.h"
 #include "fuyunix.h"
 
-#define KEY_BUF 10
-#define FIELD_LEN 30 /* Should be enough for most things */
+/* keys buffered on the stack before it's allocated to the heap */
+#define KEY_BUF 20
 
-typedef void (*FuncPtr)(int);
+/* max bytes for each field (separated by space) */
+#define FIELD_LEN 30
 
-struct FuncValMap {
-	char *name;
-	FuncPtr func;
-};
+typedef void (*keyFunc)(int);
 
 struct Key {
 	SDL_Scancode key;
-	FuncPtr func;
+	keyFunc func;
 	int player;
 };
 
@@ -57,13 +55,19 @@ struct Parser {
 	int lineno;
 };
 
+struct FuncValMap {
+	char *name;
+	keyFunc func;
+};
+
+/* Note: don't use spaces in the name */
 static struct FuncValMap funclist[] = {
-	{ "jump",          jump },
-	{ "down",          down },
-	{ "right",        right },
-	{ "left",          left },
-	{ "quit",      quitloop },
-	{ "draw menu",    drwMenu },
+	{ "jump",           jump },
+	{ "down",           down },
+	{ "right",         right },
+	{ "left",           left },
+	{ "quit",       quitloop },
+	{ "drawMenu",    drwMenu },
 };
 
 static struct Key defaultkey[] = {
@@ -87,7 +91,7 @@ static struct Key defaultkey[] = {
 static struct Keys *keys;
 
 /* Functions definitions */
-static FuncPtr
+static keyFunc
 getFunc(char *name)
 {
 	size_t size = sizeof(funclist) / sizeof(funclist[0]);
