@@ -225,14 +225,10 @@ drwMenuText(SDL_Surface *s, char *text, int x, int y, double size)
 	cairo_surface_destroy(cSurface);
 }
 
-void
-drwHomeMenu(int gaps, int focus, int size, int width, int height)
+static SDL_Texture *
+drwHomeMenu(SDL_Surface *s, int gaps, int focus, int size, int width, int height)
 {
-	SDL_Surface *s = SDL_CreateRGBSurface(0, game.w, game.h, 32, 0, 0, 0, 0);
-	if (s == NULL) {
-		fprintf(stderr, "SDL_CreateRGBSurface: %s\n", SDL_GetError());
-		exit(1);
-	}
+	SDL_FillRect(s, NULL, 0);
 	SDL_Rect options[3] = {
 		{gaps, gaps + size, width, height},
 		{gaps, gaps + size * 2, width, height},
@@ -259,13 +255,7 @@ drwHomeMenu(int gaps, int focus, int size, int width, int height)
 	drwMenuText(s, nplayer, width - gaps * 2, offset + size * 2, textSize);
 	drwMenuText(s, "Exit", gaps*2, offset + size * 3, textSize);
 
-	SDL_Texture *t = SDL_CreateTextureFromSurface(game.rnd, s);
-	SDL_FreeSurface(s);
-
-	SDL_RenderCopy(game.rnd, t, NULL, NULL);
-	SDL_DestroyTexture(t);
-
-	SDL_RenderPresent(game.rnd);
+	return SDL_CreateTextureFromSurface(game.rnd, s);;
 }
 
 void
@@ -273,23 +263,49 @@ handleHomeMenu(void)
 {
 	bool notSelected = true;
 	int focus = 0;
+	int prevFocus = 0;
+	bool redraw = false;
 	int gaps = 0;
 	int sectionSize = 0;
 	int sectionWidth = 0;
 	int sectionHeight = 0;
+	SDL_Surface *s = SDL_CreateRGBSurface(0, game.w, game.h, 32, 0, 0, 0, 255);
+
+	SDL_Texture *t = drwHomeMenu(s, gaps, focus, sectionSize, sectionWidth, sectionHeight);
 
 	while (1) {
 		while (notSelected) {
+			/* 2 is the number of options for the player to choose */
 			notSelected = handleMenuKeys(&focus, 2);
+
 			if (getNewWinSize()) {
 				sectionSize = game.h / 4;
-
+				SDL_FreeSurface(s);
+				s = SDL_CreateRGBSurface(0, game.w, game.h, 32, 0, 0, 0, 0);
+				if (s == NULL) {
+					fprintf(stderr, "SDL_CreateRGBSurface: %s\n", SDL_GetError());
+					exit(1);
+				}
 				/* Arbitary number to get small gaps between selections */
 				gaps = game.h / 100;
 				sectionHeight = sectionSize - gaps * 2;
 				sectionWidth = game.w - gaps * 2;
+
+				redraw = true;
+			} else if (prevFocus != focus) {
+				redraw = true;
+				prevFocus = focus;
 			}
-			drwHomeMenu(gaps, focus, sectionSize, sectionWidth, sectionHeight);
+			if (redraw) {
+				SDL_DestroyTexture(t);
+				t = drwHomeMenu(s, gaps, focus, sectionSize, sectionWidth, sectionHeight);
+				if (t == NULL) {
+					fprintf(stderr, "SDL_CreateTextureFromSurface: %s\n", SDL_GetError());
+				}
+				redraw = false;
+			}
+			SDL_RenderCopy(game.rnd, t, NULL, NULL);
+			SDL_RenderPresent(game.rnd);
 		}
 		if (focus == 1) {
 			if (game.numplayers >= 1)
@@ -298,6 +314,7 @@ handleHomeMenu(void)
 				game.numplayers++;
 
 			notSelected = true;
+			redraw = true;
 		} else if (focus == 2) {
 			quitloop();
 			return;
@@ -305,6 +322,8 @@ handleHomeMenu(void)
 			break;
 		}
 	}
+	SDL_FreeSurface(s);
+	SDL_DestroyTexture(t);
 	loadPlayerTextures();
 }
 
