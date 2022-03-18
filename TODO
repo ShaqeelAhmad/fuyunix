@@ -1,7 +1,0 @@
-- At least 4 sprites / frames for players
-- A small map with at least 10 levels
-- Joystick / gamepad support. Unfortunately I don't have one to try it out.
-  (Apparently there's a lot of limitations with keyboard for 2 player games,
-  so joystick / gamepad support is essential to having a good experience for
-  local multiplayer). This shouldn't affect Single player experience on
-  keyboard.
