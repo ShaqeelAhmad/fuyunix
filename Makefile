@@ -17,6 +17,6 @@ install:
 uninstall:
 	$(MAKE) uninstall -C src
 	rm -f $(MANDIR)/fuyunix.6
-	rm -rf $(DATADIR)
+	rm -rf $(DATADIR)/fuyunix
 
 .PHONY: clean install uninstall

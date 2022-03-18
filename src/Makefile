@@ -6,7 +6,7 @@ OBJ = $(SRC:.c=.o)
 all: fuyunix
 
 .c.o:
-	$(CC) -c $< $(CFLAGS)
+	$(CC) $(CFLAGS) -c $<
 
 fuyunix: $(OBJ)
 	$(CC) -o $@ $(OBJ) $(LDFLAGS)
@@ -15,12 +15,12 @@ clean:
 	rm -f fuyunix $(OBJ)
 
 install: all
-	mkdir -p $(DIR)/bin
-	cp -f fuyunix $(DIR)/bin
-	chmod 755 $(DIR)/bin/fuyunix
+	mkdir -p $(BINDIR)
+	cp -f fuyunix $(BINDIR)
+	chmod 755 $(BINDIR)/fuyunix
 
 uninstall:
-	rm -f $(DIR)/bin/fuyunix
+	rm -f $(BINDIR)/fuyunix
 
 
 .PHONY: clean install uninstall
