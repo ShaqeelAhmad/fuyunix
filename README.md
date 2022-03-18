@@ -33,8 +33,8 @@ systems
 
 # Installation
 ```sh
-make
-make install
+$ make
+# make install
 ```
 edit `config.mk` for any configurations
 
