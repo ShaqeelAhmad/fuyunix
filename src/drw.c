@@ -262,15 +262,14 @@ void
 handleHomeMenu(void)
 {
 	bool notSelected = true;
+	bool redraw = false;
 	int focus = 0;
 	int prevFocus = 0;
-	bool redraw = false;
 	int gaps = 0;
 	int sectionSize = 0;
 	int sectionWidth = 0;
 	int sectionHeight = 0;
 	SDL_Surface *s = SDL_CreateRGBSurface(0, game.w, game.h, 32, 0, 0, 0, 255);
-
 	SDL_Texture *t = drwHomeMenu(s, gaps, focus, sectionSize, sectionWidth, sectionHeight);
 
 	while (1) {
@@ -368,6 +367,9 @@ loadPlayerImages(int i)
 static void
 loadPlayerTextures(void)
 {
+	if (IMG_Init(IMG_INIT_PNG) != IMG_INIT_PNG) {
+		fprintf(stderr, "IMG_Init: %s\n", IMG_GetError());
+	}
 	player = (struct Player *)qcalloc(
 			game.numplayers + 1, sizeof(struct Player));
 
@@ -384,12 +386,12 @@ loadPlayerTextures(void)
 		player[i].w = PLAYER_SIZE;
 		player[i].h = PLAYER_SIZE;
 	}
+	IMG_Quit();
 }
 
 static void
 freePlayerTextures(void)
 {
-	/* Causes segfaults if ignored. (this is for me) */
 	if (player == NULL)
 		return;
 
