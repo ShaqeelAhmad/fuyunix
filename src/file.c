@@ -129,7 +129,7 @@ readFile(char *name)
 
 	fseek(fp, 0, SEEK_SET);
 
-	char *c = qcalloc(size, sizeof(char));
+	char *c = qcalloc(size+1, sizeof(char));
 
 	fread(c, sizeof(char), size, fp);
 
