@@ -32,9 +32,9 @@ systems
 `data/` contains the assets
 
 # Installation
-```sh
+```
 $ make
-\# make install
+# make install
 ```
 Note: look at `config.mk` for enabling `immintrin.h` (possible cpu
 optimizations) and for other configurations.
