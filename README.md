@@ -34,9 +34,10 @@ systems
 # Installation
 ```sh
 $ make
-# make install
+\# make install
 ```
-edit `config.mk` for any configurations
+Note: look at `config.mk` for enabling `immintrin.h` (possible cpu
+optimizations) and for other configurations.
 
 # Usage
 `-v` for version
