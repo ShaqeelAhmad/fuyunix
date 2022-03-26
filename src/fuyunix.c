@@ -50,11 +50,10 @@ run(void)
 	SDL_Event event;
 
 	while (!quit) {
+		handleKeys();
 		while (SDL_PollEvent(&event) != 0) {
 			if (event.type == SDL_QUIT)
 				quitloop();
-			else if (event.type == SDL_KEYDOWN)
-				handleKeys(&event.key);
 		}
 		drw();
 	}

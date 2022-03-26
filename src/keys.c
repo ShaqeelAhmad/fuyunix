@@ -103,27 +103,6 @@ getFunc(char *name)
 	return NULL;
 }
 
-static void
-loopkeys(SDL_KeyboardEvent *keyevent)
-{
-	int i;
-	const Uint8 *state = SDL_GetKeyboardState(NULL);
-	for (i = 0; i < keys->keysize; i++) {
-		if (keyevent->keysym.scancode == keys->key[i].key) {
-			keys->key[i].func(keys->key[i].player);
-		}
-
-		if (left == keys->key[i].func && state[keys->key[i].key])
-			keys->key[i].func(keys->key[i].player);
-		if (right == keys->key[i].func && state[keys->key[i].key])
-			keys->key[i].func(keys->key[i].player);
-		if (down == keys->key[i].func && state[keys->key[i].key])
-			keys->key[i].func(keys->key[i].player);
-		if (jump == keys->key[i].func && state[keys->key[i].key])
-			keys->key[i].func(keys->key[i].player);
-	}
-}
-
 int
 handleMenuKeys(int *focus, int last)
 {
@@ -161,9 +140,13 @@ handleMenuKeys(int *focus, int last)
 }
 
 void
-handleKeys(SDL_KeyboardEvent *keyevent)
+handleKeys(void)
 {
-	loopkeys(keyevent);
+	const Uint8 *state = SDL_GetKeyboardState(NULL);
+	for (int i = 0; i < keys->keysize; i++) {
+		if (state[keys->key[i].key])
+			keys->key[i].func(keys->key[i].player);
+	}
 }
 
 static void
