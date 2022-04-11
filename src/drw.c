@@ -79,7 +79,7 @@ struct Game {
 	int ow;
 	int oh;
 
-	int cam;
+	double cam;
 
 	double scale;
 	int numplayers;
@@ -329,7 +329,7 @@ handleHomeMenu(void)
 void
 drwMenu(int player)
 {
-	/* TODO Draw a menu */
+	/* TODO: Draw a menu */
 	quitloop();
 }
 
@@ -536,7 +536,7 @@ collisionDetection(int i)
 static void
 movePlayers(void)
 {
-	/* TODO Player-Player collision */
+	/* TODO: Player-Player collision */
 	for (int i = 0; i <= game.numplayers; i++) {
 		gravity(i);
 
@@ -547,12 +547,13 @@ movePlayers(void)
 		}
 
 		/* TODO: fix the camera for 2 player mode and make scrolling smoother */
-		if (player[i].x - game.cam > VIRTUAL_WIDTH * 0.8) {
-			game.cam++;
-			continue;
-		} else if (player[i].x - game.cam <= VIRTUAL_WIDTH * 0.2 && game.cam != 0) {
-			game.cam--;
-			continue;
+		double playerPos = player[i].x - game.cam;
+		double rightScrollPos = VIRTUAL_WIDTH * 0.8;
+		double leftScrollPos = VIRTUAL_WIDTH * 0.2;
+		if (playerPos + player[i].w > rightScrollPos) {
+			game.cam += playerPos + player[i].w - rightScrollPos;
+		} else if (playerPos <= leftScrollPos && game.cam != 0) {
+			game.cam -=  leftScrollPos - playerPos;
 		}
 
 		if (player[i].dx >= -0.05 && player[i].dx <= 0.05) {
