@@ -21,6 +21,9 @@ systems
 * Minimal dependencies
 * Joystick / gamepad support.
 
+# Screenshots
+TBD
+
 # Non-goals
 * Mouse support.
 
