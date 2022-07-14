@@ -10,8 +10,8 @@ CFLAGS = -g -Wall -Werror -pedantic -Wextra -std=c99 -Wno-unused-parameter
 
 CFLAGS += -DRESOURCE_PATH=\"$(RESOURCE_PATH)\" `pkg-config --cflags cairo sdl2`
 
-## Disables cpu specific vector operations which doesn't work on certain
-## compilers. You might want to remove this if your compiler supports it.
+## Disable cpu specific vector operations which doesn't work on certain
+## compilers. I'm not using these features so it shouldn't change anything.
 CFLAGS += -DSDL_DISABLE_IMMINTRIN_H
 
 LDFLAGS = `pkg-config --libs sdl2 cairo SDL2_image` -lm

@@ -39,8 +39,8 @@ TBD
 $ make
 # make install
 ```
-Note: look at `config.mk` for enabling `immintrin.h` (possible cpu
-optimizations) and for other configurations.
+
+Modify `config.mk` for configurations.
 
 # Usage
 `-v` for version
