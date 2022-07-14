@@ -2,13 +2,12 @@
 A small platformer game using SDL2
 
 # Dependencies
-```
-c compiler*
-cairo
-sdl2
-sdl2_image
-make
-```
+- c99 C compiler*
+- cairo
+- sdl2
+- sdl2_image
+- make
+
 \* Only tcc, gcc and clang are tested.
 Other compilers might not work.
 
@@ -36,6 +35,7 @@ TBD
 
 # Installation
 ```
+$ cp config.def.mk config.mk
 $ make
 # make install
 ```
