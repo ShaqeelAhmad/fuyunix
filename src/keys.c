@@ -140,9 +140,8 @@ handleMenuKeys(int *focus, int last)
 }
 
 void
-handleKeys(void)
+handleKeys(const Uint8 *state)
 {
-	const Uint8 *state = SDL_GetKeyboardState(NULL);
 	for (int i = 0; i < keys->keysize; i++) {
 		if (state[keys->key[i].key])
 			keys->key[i].func(keys->key[i].player);

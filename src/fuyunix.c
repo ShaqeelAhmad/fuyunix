@@ -35,6 +35,8 @@
 /* global variables */
 static bool quit = false;
 
+const Uint8 *state = NULL;
+
 /* Function definitions */
 void
 quitloop()
@@ -50,7 +52,7 @@ run(void)
 	SDL_Event event;
 
 	while (!quit) {
-		handleKeys();
+		handleKeys(state);
 		while (SDL_PollEvent(&event) != 0) {
 			if (event.type == SDL_QUIT)
 				quitloop();
@@ -85,6 +87,8 @@ main(int argc, char *argv[])
 	}
 
 	init(flags);
+
+	state = SDL_GetKeyboardState(NULL);
 
 	run();
 
