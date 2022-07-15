@@ -1,7 +1,7 @@
-# fuyunix
+# Fuyunix
 A small platformer game using SDL2
 
-# Dependencies
+## Dependencies
 - c99 C compiler*
 - cairo
 - sdl2
@@ -11,29 +11,29 @@ A small platformer game using SDL2
 \* Only tcc, gcc and clang are tested.
 Other compilers might not work.
 
-# Portablility
+## Portablility
 I use Linux and can't guarantee that the program will work on other operating
 systems
 
-# Goals
+## Goals
 * Lightweight (so my potato pc can handle it)
 * Minimal dependencies
 * Joystick / gamepad support.
 
-# Screenshots
+## Screenshots
 TBD
 
-# Non-goals
+## Non-goals
 * Mouse support.
 
-# Files
+## Files
 `src/` directory contains the source code
 
 `man/` contains the man page
 
 `data/` contains the assets
 
-# Installation
+## Installation
 ```
 $ cp config.def.mk config.mk
 $ make
@@ -42,12 +42,12 @@ $ make
 
 Modify `config.mk` for configurations.
 
-# Usage
+## Usage
 `-v` for version
 
 `-l` for list of functions
 
 don't pass any arguments to start the game.
 
-# License
+## License
 GPLv3 [LICENSE](LICENSE) for the source code and CC0 for the images
