@@ -17,6 +17,7 @@
  *  along with fuyunix.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <assert.h>
 #include <cairo.h>
 #include <limits.h>
 #include <math.h>
@@ -25,33 +26,36 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#include "alloc.h"
-#include "file.h"
+#include "util.h"
 #include "fuyunix.h"
 #include "keys.h"
 
-/* Constants */
-#define GRAVITY 0.0198f
-#define JUMP_ACCEL 0.4f
-#define SPEED_ACCEL 0.02f
-#define SPEED_MAX 2
+#define GRAVITY 6.18f
+#define JUMP_ACCEL (GRAVITY*10)
+#define SPEED_ACCEL 2.02f
+#define SPEED_MAX 8
 #define FRICTION 0.88f
 #define PLAYER_SIZE 1
 
-#define FRAME_NUM 3 /* FIXME: Temporary to avoid errors */
+#define FRAME_NUM 3
 
-#define VIRTUAL_WIDTH 16
-#define VIRTUAL_HEIGHT 18
-#define STAGE_LENGTH 128
+#define BOX_SIZE 25
+#define LOGICAL_WIDTH 800
+#define LOGICAL_HEIGHT 450
+#define STAGE_LENGTH (LOGICAL_WIDTH * 12)
 
 const SDL_Rect level[] = {
-	{0, VIRTUAL_HEIGHT-1, STAGE_LENGTH, 1},
-	{3, VIRTUAL_HEIGHT-5, 10, 2},
-	{(STAGE_LENGTH / 2) - 20, (VIRTUAL_HEIGHT / 2) - 20, 20, 20},
-	{9, VIRTUAL_HEIGHT-2, 2, 2},
+	{0, LOGICAL_HEIGHT-BOX_SIZE, STAGE_LENGTH, BOX_SIZE},
+	{3*BOX_SIZE, LOGICAL_HEIGHT - 5*BOX_SIZE, 10*BOX_SIZE, 2 * BOX_SIZE},
+	{9*BOX_SIZE, LOGICAL_HEIGHT-2*BOX_SIZE, 2*BOX_SIZE, 2*BOX_SIZE},
 };
 
-/* structs */
+enum GameState {
+	STATE_MENU,
+	STATE_PLAY,
+	STATE_PAUSE,
+};
+
 struct Player {
 	SDL_Texture *frame[FRAME_NUM];
 	SDL_Texture **current;
@@ -72,12 +76,14 @@ struct Game {
 	SDL_Window *win;
 	SDL_Renderer *rnd;
 
+	enum GameState state;
+
+	bool focusSelect;
+	int focusChange;
+	int menuFocus;
+
 	int h;
 	int w;
-
-	/* Old width / height */
-	int ow;
-	int oh;
 
 	double cam;
 
@@ -86,75 +92,111 @@ struct Game {
 	int level;
 };
 
-/* Global variables */
 static struct Game game;
 static struct Player *player;
 
-/* Function declarations */
-static void freePlayerTextures(void);
-static void loadPlayerTextures(void);
-
-
-/* Function definitions */
-static double
-getScale(void)
+void
+negativeDie(int x)
 {
-	double h = game.h / VIRTUAL_HEIGHT;
-	double w = game.w / VIRTUAL_WIDTH;
-
-	return w < h ? w : h;
-}
-
-static int
-getX(double x)
-{
-	if (x == -1)
-		return VIRTUAL_WIDTH;
-	x -= game.cam;
-
-	return x * game.scale;
-}
-
-static int
-getW(double x)
-{
-	if (x == -1)
-		return VIRTUAL_WIDTH;
-
-	return x * game.scale;
-}
-
-static int
-getY(double y)
-{
-	if (y == -1)
-		return VIRTUAL_HEIGHT;
-
-	return y * game.scale;
-}
-
-static int
-getNewWinSize(void)
-{
-	SDL_GetWindowSize(game.win, &game.w, &game.h);
-	if (game.w != game.ow || game.h != game.oh) {
-		game.ow = game.w;
-		game.oh = game.h;
-		game.scale = getScale();
-		return 1;
+	if (x < 0) {
+		fprintf(stderr, "%s\n", SDL_GetError());
+		exit(-1);
 	}
-	return 0;
 }
+
+void *
+nullDie(void *p)
+{
+	if (p == NULL) {
+		fprintf(stderr, "%s\n", SDL_GetError());
+		exit(-1);
+	}
+	return p;
+}
+
+static void
+formatPath(char *path, char *resPath, int i, int frame)
+{
+	if (sprintf(path, "%s%s%d%s%d%s", resPath, "/fuyunix/data/", i,
+				"/sprite-", frame, ".png") < 0) {
+		perror("sprintf: ");
+	};
+}
+
+static void
+loadPlayerImages(int i)
+{
+	char *userDir = getenv("XDG_DATA_HOME");
+	for (int frame = 0; frame < FRAME_NUM; frame++) {
+		char path[PATH_MAX];
+		formatPath(path, userDir, i, frame);
+
+		player[i].frame[frame] = IMG_LoadTexture(game.rnd, path);
+
+		if (player[i].frame[frame] == NULL) {
+			formatPath(path, RESOURCE_PATH, i, frame);
+			player[i].frame[frame] = IMG_LoadTexture(game.rnd, path);
+
+			if (player[i].frame[frame] == NULL) {
+				fprintf(stderr, "Unable to Load Texture: %s\n",
+						IMG_GetError());
+			}
+		}
+	}
+}
+
+static void
+loadPlayerTextures(void)
+{
+	if (IMG_Init(IMG_INIT_PNG) != IMG_INIT_PNG) {
+		fprintf(stderr, "IMG_Init: %s\n", IMG_GetError());
+	}
+	if (player != NULL) {
+		free(player);
+	}
+	player = (struct Player *)qcalloc(
+			game.numplayers + 1, sizeof(struct Player));
+
+	for (int i = 0; i <= game.numplayers; i++) {
+		loadPlayerImages(i);
+
+		player[i].current = &player[i].frame[0];
+
+		player[i].x  = 0;
+		player[i].y  = 0;
+		player[i].dx = 0;
+		player[i].dy = 0;
+
+		player[i].w = PLAYER_SIZE;
+		player[i].h = PLAYER_SIZE;
+	}
+	IMG_Quit();
+}
+
+static void
+freePlayerTextures(void)
+{
+	if (player == NULL)
+		return;
+
+	for (int i = 0; i <= game.numplayers; i++)
+		for (int frame = 0; frame < FRAME_NUM; frame++)
+			SDL_DestroyTexture(player[i].frame[frame]);
+
+	free(player);
+}
+
 
 static void
 initVariables()
 {
+	game.state = STATE_MENU;
 	game.level = readSaveFile();
 
 	game.numplayers = 0;
 
-	game.ow = 0;
-	game.oh = 0;
+	game.w = LOGICAL_WIDTH;
+	game.h = LOGICAL_HEIGHT;
 
 	game.cam = 0;
 
@@ -164,28 +206,18 @@ initVariables()
 void
 init(int winFlags)
 {
-	if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-		fprintf(stderr, "Unable to initialize SDL: %s\n", SDL_GetError());
-		exit(-1);
-	}
+	negativeDie(SDL_Init(SDL_INIT_VIDEO));
 
-	game.win = SDL_CreateWindow(NAME, SDL_WINDOWPOS_UNDEFINED,
-			SDL_WINDOWPOS_UNDEFINED, 640, 480, winFlags);
+	game.win = nullDie(SDL_CreateWindow(NAME, SDL_WINDOWPOS_UNDEFINED,
+				SDL_WINDOWPOS_UNDEFINED, LOGICAL_WIDTH, LOGICAL_HEIGHT,
+				winFlags));
 
-	if (game.win == NULL) {
-		fprintf(stderr, "Unable to create SDL window: %s\n", SDL_GetError());
-		exit(-1);
-	}
+	game.rnd = nullDie(SDL_CreateRenderer(game.win, -1,
+				SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC));
 
-	game.rnd = SDL_CreateRenderer(game.win, -1,
-			SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+	SDL_RenderSetLogicalSize(game.rnd, LOGICAL_WIDTH, LOGICAL_HEIGHT);
 
-	if (game.rnd == NULL) {
-		fprintf(stderr, "Unable to create SDL renderer: %s\n", SDL_GetError());
-		exit(-1);
-	}
-
-	getKeys();
+	loadConfig();
 
 	initVariables();
 }
@@ -259,150 +291,6 @@ drwHomeMenu(SDL_Surface *s, int gaps, int focus, int size, int width, int height
 }
 
 void
-handleHomeMenu(void)
-{
-	bool notSelected = true;
-	bool redraw = false;
-	int focus = 0;
-	int prevFocus = 0;
-	int gaps = 0;
-	int sectionSize = 0;
-	int sectionWidth = 0;
-	int sectionHeight = 0;
-	SDL_Surface *s = SDL_CreateRGBSurface(0, game.w, game.h, 32, 0, 0, 0, 255);
-	SDL_Texture *t = drwHomeMenu(s, gaps, focus, sectionSize, sectionWidth, sectionHeight);
-
-	while (1) {
-		while (notSelected) {
-			/* 2 is the number of options for the player to choose */
-			notSelected = handleMenuKeys(&focus, 2);
-
-			if (getNewWinSize()) {
-				sectionSize = game.h / 4;
-				SDL_FreeSurface(s);
-				s = SDL_CreateRGBSurface(0, game.w, game.h, 32, 0, 0, 0, 0);
-				if (s == NULL) {
-					fprintf(stderr, "SDL_CreateRGBSurface: %s\n", SDL_GetError());
-					exit(1);
-				}
-				/* Arbitary number to get small gaps between selections */
-				gaps = game.h / 100;
-				sectionHeight = sectionSize - gaps * 2;
-				sectionWidth = game.w - gaps * 2;
-
-				redraw = true;
-			} else if (prevFocus != focus) {
-				redraw = true;
-				prevFocus = focus;
-			}
-			if (redraw) {
-				SDL_DestroyTexture(t);
-				t = drwHomeMenu(s, gaps, focus, sectionSize, sectionWidth, sectionHeight);
-				if (t == NULL) {
-					fprintf(stderr, "SDL_CreateTextureFromSurface: %s\n", SDL_GetError());
-				}
-				redraw = false;
-			}
-			SDL_RenderCopy(game.rnd, t, NULL, NULL);
-			SDL_RenderPresent(game.rnd);
-		}
-		if (focus == 1) {
-			if (game.numplayers >= 1)
-				game.numplayers = 0;
-			else
-				game.numplayers++;
-
-			notSelected = true;
-			redraw = true;
-		} else if (focus == 2) {
-			quitloop();
-			return;
-		} else {
-			break;
-		}
-	}
-	SDL_FreeSurface(s);
-	SDL_DestroyTexture(t);
-	loadPlayerTextures();
-}
-
-void
-drwMenu(int player)
-{
-	/* TODO: Draw a menu */
-	quitloop();
-}
-
-static void
-formatPath(char *path, char *resPath, int i, int frame)
-{
-	if (sprintf(path, "%s%s%d%s%d%s", resPath, "/fuyunix/data/", i,
-				"/sprite-", frame, ".png") < 0) {
-		perror("sprintf: ");
-	};
-}
-
-static void
-loadPlayerImages(int i)
-{
-	char *userDir = getenv("XDG_DATA_HOME");
-	for (int frame = 0; frame < FRAME_NUM; frame++) {
-		char path[PATH_MAX];
-		formatPath(path, userDir, i, frame);
-
-		player[i].frame[frame] = IMG_LoadTexture(game.rnd, path);
-
-		if (player[i].frame[frame] == NULL) {
-			formatPath(path, RESOURCE_PATH, i, frame);
-			player[i].frame[frame] = IMG_LoadTexture(game.rnd, path);
-
-			if (player[i].frame[frame] == NULL) {
-				fprintf(stderr, "Unable to Load Texture: %s\n",
-						IMG_GetError());
-			}
-		}
-	}
-}
-
-static void
-loadPlayerTextures(void)
-{
-	if (IMG_Init(IMG_INIT_PNG) != IMG_INIT_PNG) {
-		fprintf(stderr, "IMG_Init: %s\n", IMG_GetError());
-	}
-	player = (struct Player *)qcalloc(
-			game.numplayers + 1, sizeof(struct Player));
-
-	for (int i = 0; i <= game.numplayers; i++) {
-		loadPlayerImages(i);
-
-		player[i].current = &player[i].frame[0];
-
-		player[i].x  = 0;
-		player[i].y  = 0;
-		player[i].dx = 0;
-		player[i].dy = 0;
-
-		player[i].w = PLAYER_SIZE;
-		player[i].h = PLAYER_SIZE;
-	}
-	IMG_Quit();
-}
-
-static void
-freePlayerTextures(void)
-{
-	if (player == NULL)
-		return;
-
-	for (int i = 0; i <= game.numplayers; i++)
-		for (int frame = 0; frame < FRAME_NUM; frame++)
-			SDL_DestroyTexture(player[i].frame[frame]);
-
-	free(player);
-}
-
-void
 down(int i)
 {
 	/* Do nothing for now */
@@ -426,7 +314,7 @@ right(int i)
 {
 	i = i > game.numplayers ? 0 : i;
 
-	if (player[i].x + player[i].w >= STAGE_LENGTH)
+	if (player[i].x + player[i].w >= LOGICAL_WIDTH)
 		return;
 
 	if (player[i].dx < SPEED_MAX)
@@ -541,15 +429,15 @@ movePlayers(void)
 		gravity(i);
 
 		if ((player[i].x <= 0 && player[i].dx < 0)
-				|| (player[i].x + player[i].w >= STAGE_LENGTH
+				|| (player[i].x + player[i].w >= LOGICAL_WIDTH
 					&& player[i].dx > 0)) {
 			player[i].dx = 0;
 		}
 
 		/* TODO: fix the camera for 2 player mode and make scrolling smoother */
 		double playerPos = player[i].x - game.cam;
-		double rightScrollPos = VIRTUAL_WIDTH * 0.8;
-		double leftScrollPos = VIRTUAL_WIDTH * 0.2;
+		double rightScrollPos = LOGICAL_WIDTH * 0.8;
+		double leftScrollPos = LOGICAL_WIDTH * 0.2;
 		if (playerPos + player[i].w > rightScrollPos) {
 			game.cam += playerPos + player[i].w - rightScrollPos;
 		} else if (playerPos <= leftScrollPos && game.cam != 0) {
@@ -570,8 +458,8 @@ drwPlayers(void)
 {
 	for (int i = 0; i <= game.numplayers; i++) {
 		SDL_Rect playrect = {
-			getX(player[i].x), getY(player[i].y),
-			getW(player[i].w), getY(player[i].h)
+			player[i].x, player[i].y,
+			player[i].w*BOX_SIZE, player[i].h*BOX_SIZE
 		};
 
 		/* Draw a black square in place of texture that failed to load */
@@ -594,10 +482,10 @@ drwPlatforms(void)
 	SDL_SetRenderDrawColor(game.rnd, 0xed, 0xed, 0xed, SDL_ALPHA_OPAQUE);
 	for (int i = 0; i < (int)(sizeof(level) / sizeof(level[0])); i++) {
 		SDL_Rect l;
-		l.x = getX((double)level[i].x);
-		l.y = getY((double)level[i].y);
-		l.w = getW((double)level[i].w);
-		l.h = getY((double)level[i].h);
+		l.x = (double)level[i].x;
+		l.y = (double)level[i].y;
+		l.w = (double)level[i].w;
+		l.h = (double)level[i].h;
 
 		SDL_RenderFillRect(game.rnd, &l);
 	}
@@ -608,20 +496,174 @@ drwPlatforms(void)
 void
 drw(void)
 {
-	getNewWinSize();
+	SDL_Rect screenRect = {0, 0, game.w, game.h};
+	switch (game.state) {
+	case STATE_MENU:
+		SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, SDL_ALPHA_OPAQUE);
+		SDL_RenderClear(game.rnd);
+		// TODO: store the surfaces / textures somewhere and only update when
+		// needed
+		int gaps = game.h / 100;
+		int sectionSize = game.h / 4;
+		int sectionHeight = sectionSize - gaps * 2;
+		int sectionWidth = game.w - gaps * 2;
+		game.menuFocus += game.focusChange;
+		if (game.menuFocus < 0) game.menuFocus = 0;
+		if (game.menuFocus > 2) game.menuFocus = 2;
+		game.focusChange = 0;
+		SDL_Surface *s = nullDie(SDL_CreateRGBSurface(0, game.w, game.h, 32, 0,
+					0, 0, 255));
+		SDL_Texture *t = nullDie(drwHomeMenu(s, gaps, game.menuFocus,
+					sectionSize, sectionWidth, sectionHeight));
 
-	SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, SDL_ALPHA_OPAQUE);
-	SDL_RenderClear(game.rnd);
+		if (game.focusSelect) {
+			switch (game.menuFocus) {
+			case 0:
+				game.state = STATE_PLAY;
+				loadPlayerTextures();
+				break;
+			case 1:
+				if (game.numplayers >= 1)
+					game.numplayers = 0;
+				else
+					game.numplayers++;
+				break;
+			case 2:
+				quitloop();
+				break;
+			};
+		}
+		game.focusSelect = 0;
 
-	/* Change background to color: "#114261" */
-	SDL_SetRenderDrawColor(game.rnd, 0x11, 0x41, 0x61, SDL_ALPHA_OPAQUE);
-	SDL_Rect r = {0, 0, getX(STAGE_LENGTH), getY(VIRTUAL_HEIGHT)};
-	SDL_RenderFillRect(game.rnd, &r);
+		SDL_RenderCopy(game.rnd, t, NULL, NULL);
+		SDL_DestroyTexture(t);
+		SDL_FreeSurface(s);
+		break;
+	case STATE_PLAY:
+		SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, SDL_ALPHA_OPAQUE);
+		SDL_RenderClear(game.rnd);
+		/* Change background to color: "#114261" */
+		SDL_SetRenderDrawColor(game.rnd, 0x11, 0x41, 0x61, SDL_ALPHA_OPAQUE);
+		SDL_RenderFillRect(game.rnd, &screenRect);
 
-	movePlayers();
+		movePlayers();
 
-	drwPlatforms();
-	drwPlayers();
+		drwPlatforms();
+		drwPlayers();
+		break;
+	case STATE_PAUSE:
+		SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, SDL_ALPHA_OPAQUE);
+		SDL_RenderClear(game.rnd);
+		SDL_SetRenderDrawColor(game.rnd, 0x11, 0x41, 0x61, SDL_ALPHA_OPAQUE);
+		SDL_RenderFillRect(game.rnd, &screenRect);
+
+		drwPlatforms();
+		drwPlayers();
+
+		// TODO: Possibly have a pause menu?
+		SDL_Rect r = {
+			.x = game.w / 2 - BOX_SIZE,
+			.y = game.h / 2 - 2 * BOX_SIZE,
+			.w = BOX_SIZE,
+			.h = BOX_SIZE*4,
+		};
+		SDL_SetRenderDrawColor(game.rnd, 0x11, 0x11, 0x11, SDL_ALPHA_OPAQUE);
+		SDL_RenderFillRect(game.rnd, &r);
+		r.x = game.w / 2 + BOX_SIZE;
+		SDL_RenderFillRect(game.rnd, &r);
+
+		break;
+	}
 
 	SDL_RenderPresent(game.rnd);
+}
+
+/* This handles keys "slower" than handleKey. */
+void
+menuHandleKey(int sym)
+{
+	switch (game.state) {
+	case STATE_PLAY:
+		if (sym == KEY_PAUSE || sym == KEY_QUIT)
+			game.state = STATE_PAUSE;
+		break;
+	case STATE_MENU:
+		switch (sym) {
+		case KEY_UP:
+			game.focusChange = -1;
+			break;
+		case KEY_DOWN:
+			game.focusChange = 1;
+			break;
+		case KEY_LEFT:
+			game.focusChange = -1;
+			break;
+		case KEY_RIGHT:
+			game.focusChange = 1;
+			break;
+		case KEY_PAUSE:
+			break;
+		case KEY_SELECT:
+			game.focusSelect = true;
+			break;
+		case KEY_QUIT:
+			quitloop();
+			break;
+		};
+		break;
+	case STATE_PAUSE:
+		switch (sym) {
+		case KEY_UP:
+			game.focusChange = -1;
+			break;
+		case KEY_DOWN:
+			game.focusChange = 1;
+			break;
+		case KEY_LEFT:
+			game.focusChange = -1;
+			break;
+		case KEY_RIGHT:
+			game.focusChange = 1;
+			break;
+		case KEY_PAUSE:
+			game.state = STATE_PLAY;
+			break;
+		case KEY_SELECT:
+			game.focusSelect = true;
+			break;
+		case KEY_QUIT:
+			game.state = STATE_MENU;
+			break;
+		};
+		break;
+	};
+}
+
+void
+handleKey(int sym, int player)
+{
+	switch (game.state) {
+	case STATE_MENU:
+	case STATE_PAUSE:
+		break;
+	case STATE_PLAY:
+		switch (sym) {
+		case KEY_UP:
+			jump(player);
+			break;
+		case KEY_DOWN:
+			down(player);
+			break;
+		case KEY_LEFT:
+			left(player);
+			break;
+		case KEY_RIGHT:
+			right(player);
+			break;
+		case KEY_PAUSE:
+		case KEY_QUIT:
+			break;
+		};
+		break;
+	};
 }

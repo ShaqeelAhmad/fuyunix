@@ -17,7 +17,6 @@
  *  along with fuyunix.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include <ctype.h>
 #include <errno.h>
 #include <limits.h>
 #include <stdio.h>
@@ -25,11 +24,9 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#include "alloc.h"
+#include "util.h"
 
-#define SAVEDIR "XDG_STATE_HOME"
-
-static char *
+char *
 getPath(char *fullpath, char *xdg, char *file, int createDir)
 {
 	char *dirpath;
@@ -49,6 +46,7 @@ getPath(char *fullpath, char *xdg, char *file, int createDir)
 	if (createDir && mkdir(fullpath, 0755) < 0 && errno != EEXIST) {
 		fprintf(stderr, "Unable to create directory `%s`: %s\n",
 				fullpath, strerror(errno));
+		exit(1);
 	}
 
 	strcat(fullpath, file);
@@ -63,7 +61,7 @@ readSaveFile(void)
 	char savepath[PATH_MAX];
 	FILE *fp;
 
-	getPath(savepath, SAVEDIR, "/save", 1);
+	getPath(savepath, "XDG_STATE_HOME", "/save", 1);
 	fp = fopen(savepath, "rb");
 
 	if (fp == NULL) {
@@ -87,7 +85,7 @@ writeSaveFile(int level)
 	char savepath[PATH_MAX];
 	FILE *fp;
 
-	getPath(savepath, SAVEDIR, "/save", 1);
+	getPath(savepath, "XDG_STATE_HOME", "/save", 1);
 
 	fp = fopen(savepath, "wb+");
 
@@ -103,83 +101,26 @@ writeSaveFile(int level)
 	fclose(fp);
 }
 
-static char *
-readFile(char *name)
+void *
+qcalloc(size_t nmemb, size_t size)
 {
-	FILE *fp = fopen(name, "r");
-
-	/* Ignore file not existing; config file should be created by the user */
-	if (fp == NULL) {
-		if (errno != ENOENT)
-			perror(name);
-
-		return NULL;
+	void *p = calloc(nmemb, size);
+	if (p == NULL) {
+		perror("Unable to allocate memory");
+		exit(1);
 	}
 
-	fseek(fp, 0, SEEK_END);
-
-	long size = ftell(fp);
-	if (size <= 0) {
-		if (size < 0)
-			perror(name);
-
-		fclose(fp);
-		return NULL;
-	}
-
-	fseek(fp, 0, SEEK_SET);
-
-	char *c = qcalloc(size+1, sizeof(char));
-
-	fread(c, sizeof(char), size, fp);
-
-	fclose(fp);
-
-	return c;
+	return p;
 }
 
-static int
-isSpace(char c)
+void *
+qrealloc(void *ptr, size_t size)
 {
-	return c == ' ' || c == '\t';
-}
-
-static int
-removeComments(char *buf)
-{
-	char *ret = buf;
-	char *s = buf;
-	for (; *buf != '\0'; buf++, s++) {
-		if (*buf == '#') {
-			if (buf > ret && isSpace(*(buf-1)))
-				/* Handle spaces before a comment because newline is used to
-				 * get the last field */
-				for (buf--; *buf != '\0' && isSpace(*buf); buf--, s--);
-			for (; *buf != '\0' && *buf != '\n'; buf++);
-		}
-		*s = *buf;
+	void *p = realloc(ptr, size);
+	if (p == NULL) {
+		perror("Unable to reallocate memory");
+		exit(1);
 	}
 
-	*s = '\0';
-
-	return s - ret;
-}
-
-char *
-readKeyConf(char filename[PATH_MAX])
-{
-	getPath(filename, "XDG_CONFIG_HOME", "/keys.conf", 0);
-	char *file = readFile(filename);
-
-	if (file == NULL) {
-		if (errno != ENOENT)
-			fprintf(stderr, "Couldn't open file `%s`: %s\n", filename,
-					strerror(errno));
-
-		return NULL;
-	}
-
-	removeComments(file);
-
-	return file;
+	return p;
 }

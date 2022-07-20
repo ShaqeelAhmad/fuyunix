@@ -1,6 +1,9 @@
 # Fuyunix
 A small platformer game using SDL2
 
+Note: This game is still under development (alpha stage).
+Don't bother playing this now.
+
 ## Dependencies
 - c99 C compiler*
 - cairo
@@ -50,4 +53,9 @@ Modify `config.mk` for configurations.
 don't pass any arguments to start the game.
 
 ## License
-GPLv3 [LICENSE](LICENSE) for the source code and CC0 for the images
+CC0 for the images
+
+[GPLv3 LICENSE](LICENSE) for the source code
+
+[LICENSE.scfg](src/LICENSE.scfg) for scfg source code (specifically src/scfg.c
+and src/scfg.h) which is from https://git.sr.ht/~emersion/libscfg

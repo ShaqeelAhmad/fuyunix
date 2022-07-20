@@ -22,305 +22,185 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "alloc.h"
 #include "drw.h"
-#include "file.h"
-#include "fuyunix.h"
-
-/* keys buffered on the stack before it's allocated to the heap */
-#define KEY_BUF 20
-
-/* max bytes for each field (separated by space) */
-#define FIELD_LEN 30
-
-typedef void (*keyFunc)(int);
+#include "keys.h"
+#include "scfg.h"
+#include "util.h"
 
 struct Key {
 	SDL_Scancode key;
-	keyFunc func;
+	enum KeySym sym;
 	int player;
 };
 
-struct Keys {
+static struct {
 	struct Key *key;
-	int keysize;
+	int keylen;
 	int is_key_allocated;
+} keys;
+
+_Static_assert(KEY_COUNT == 7, "update keyList");
+static char *keysList[] = {
+	[KEY_UP]     = "up",
+	[KEY_DOWN]   = "down",
+	[KEY_LEFT]   = "left",
+	[KEY_RIGHT]  = "right",
+	[KEY_PAUSE]  = "pause",
+	[KEY_QUIT]   = "quit",
 };
-
-struct Parser {
-	char filename[PATH_MAX];
-	char *file;
-	char c;
-	int i;
-	int lineno;
-};
-
-struct FuncValMap {
-	char *name;
-	keyFunc func;
-};
-
-/* Note: don't use spaces in the name */
-static struct FuncValMap funclist[] = {
-	{ "jump",           jump },
-	{ "down",           down },
-	{ "right",         right },
-	{ "left",           left },
-	{ "quit",       quitloop },
-	{ "drawMenu",    drwMenu },
-};
-
-static struct Key defaultkey[] = {
-	{SDL_SCANCODE_Q,          quitloop,    0},
-	{SDL_SCANCODE_ESCAPE,     drwMenu,     0},
-
-	/* Player 1 */
-	{SDL_SCANCODE_H,             left,     0},
-	{SDL_SCANCODE_J,             down,     0},
-	{SDL_SCANCODE_K,             jump,     0},
-	{SDL_SCANCODE_L,            right,     0},
-
-	/* Player 2 */
-	{SDL_SCANCODE_A,             left,     1},
-	{SDL_SCANCODE_S,             down,     1},
-	{SDL_SCANCODE_W,             jump,     1},
-	{SDL_SCANCODE_D,            right,     1},
-};
-
-/* Global variables */
-static struct Keys *keys;
-
-/* Functions definitions */
-static keyFunc
-getFunc(char *name)
-{
-	size_t size = sizeof(funclist) / sizeof(funclist[0]);
-	for (size_t i = 0; i < size; i++) {
-		if (strcmp(funclist[i].name, name) == 0)
-			return funclist[i].func;
-	}
-
-	return NULL;
-}
-
-int
-handleMenuKeys(int *focus, int last)
-{
-	SDL_Event event;
-
-	while (SDL_PollEvent(&event) != 0) {
-		if (event.type == SDL_QUIT) {
-			quitloop();
-			*focus = last;
-			return 0;
-		} else if (event.type == SDL_KEYDOWN) {
-			switch (event.key.keysym.scancode) {
-			case SDL_SCANCODE_K:
-				if (*focus > 0)
-					*focus -= 1;
-				break;
-			case SDL_SCANCODE_J:
-				if (*focus < last)
-					*focus += 1;
-				break;
-			case SDL_SCANCODE_Q:
-				quitloop();
-				*focus = last;
-				return 0;
-			case SDL_SCANCODE_RETURN:
-			case SDL_SCANCODE_SPACE:
-				return 0;
-			/* default required for enum */
-			default:
-				break;
-			}
-		}
-	}
-	return 1;
-}
-
-void
-handleKeys(const Uint8 *state)
-{
-	for (int i = 0; i < keys->keysize; i++) {
-		if (state[keys->key[i].key])
-			keys->key[i].func(keys->key[i].player);
-	}
-}
-
-static void
-parserAdvance(struct Parser *p)
-{
-	if (p->c != '\0')
-		p->i++;
-
-	p->c = p->file[p->i];
-}
-
-static void
-skipWhitespace(struct Parser *p)
-{
-	while (p->c == ' ' || p->c == '\t' || p->c == '\n') {
-		if (p->c == '\n')
-			p->lineno++;
-
-		parserAdvance(p);
-	}
-}
-
-static char *
-getField(char *str, struct Parser *p, int (*cmp)(int))
-{
-	skipWhitespace(p);
-
-	if (!cmp(p->c)) {
-		fprintf(stderr, "%s:%d Unexpected character `%c`(0x%X)\n",
-				p->filename, p->lineno, p->c, p->c);
-		return NULL;
-	}
-
-	int prev = p->i;
-
-	while (cmp(p->c) && p->c != '\0')
-		parserAdvance(p);
-
-	int size = p->i - prev;
-	if (size > FIELD_LEN) {
-		fprintf(stderr, "%s:%d Field may be too long: Make sure it's at most"
-				" %d bytes\nFirst %d bytes of field: `%.*s`\n" , p->filename,
-				p->lineno, FIELD_LEN, FIELD_LEN, FIELD_LEN, p->file+prev);
-		return NULL;
-	}
-
-	strncpy(str,  &p->file[prev], size);
-
-	return str;
-}
 
 static int
-isNewline(int c)
+stringToKey(char *s)
 {
-	return c != '\n';
-}
-
-static struct Key *
-parseKeys(struct Parser *p, int *size)
-{
-	struct Key keybuf[KEY_BUF];
-	size_t keybufSize = 0;
-	struct Key *key = NULL;
-
-	while (p->c != '\0') {
-		int player = 0;
-		char playerNum[FIELD_LEN];
-		char func[FIELD_LEN];;
-		char keyname[FIELD_LEN];
-		memset(playerNum, 0, FIELD_LEN);
-		memset(func, 0, FIELD_LEN);
-		memset(keyname, 0, FIELD_LEN);
-
-		char *err;
-		err = getField(playerNum, p, isalnum);
-		if (err == NULL) {
-			free(key);
-			return NULL;
-		}
-		player = atoi(playerNum);
-
-		err = getField(func, p, isalnum);
-		if (err == NULL) {
-			free(key);
-			return NULL;
-		}
-
-		err = getField(keyname, p, isNewline);
-		if (err == NULL) {
-			free(key);
-			return NULL;
-		}
-
-		/* key = qrealloc(key, ((*size) + 1) * sizeof(struct Key)); */
-
-		keybuf[keybufSize].player = player;
-		keybuf[keybufSize].func = getFunc(func);
-		keybuf[keybufSize].key = SDL_GetScancodeFromName(keyname);
-
-		if (keybuf[keybufSize].func == NULL) {
-			fprintf(stderr, "%s:%d Invalid function `%s`\n"
-					"The default keys will be used\n", p->filename, p->lineno,
-					func);
-
-			*size = 0;
-			free(key);
-			return NULL;
-		}
-		if (keybuf[keybufSize].func == SDL_SCANCODE_UNKNOWN) {
-			fprintf(stderr, "%s:%d Invalid  key `%s`\n"
-					"The default keys will be used\n", p->filename, p->lineno,
-					keyname);
-
-			*size = 0;
-			free(key);
-			return NULL;
-		}
-
-		keybufSize++;
-
-		if (keybufSize >= KEY_BUF) {
-			*size += keybufSize;
-			key = qrealloc(key, sizeof(struct Key) * *size);
-			memcpy(key, keybuf, sizeof(struct Key) * *size);
-			keybufSize = 0;
-		}
-
-		/* catch '\0' appearing after newline */
-		skipWhitespace(p);
+	for (size_t i = 0; i < sizeof(keysList) / sizeof(keysList[0]); i++) {
+		if (strcmp(s, keysList[i]) == 0)
+			return i;
 	}
-	*size += keybufSize;
-	key = qrealloc(key, sizeof(struct Key) * *size);
-	memcpy(key, keybuf, sizeof(struct Key) * *size);
-
-	return key;
+	return -1;
 }
+
+static struct Key defaultkey[] = {
+	{SDL_SCANCODE_Q,        KEY_QUIT,   0},
+	{SDL_SCANCODE_ESCAPE,   KEY_PAUSE,  0},
+
+	/* Player 1 */
+	{SDL_SCANCODE_H,        KEY_LEFT,   0},
+	{SDL_SCANCODE_J,        KEY_DOWN,   0},
+	{SDL_SCANCODE_K,        KEY_UP,     0},
+	{SDL_SCANCODE_L,        KEY_RIGHT,  0},
+
+	/* Player 2 */
+	{SDL_SCANCODE_A,        KEY_LEFT,   1},
+	{SDL_SCANCODE_S,        KEY_DOWN,   1},
+	{SDL_SCANCODE_W,        KEY_UP,     1},
+	{SDL_SCANCODE_D,        KEY_RIGHT,  1},
+};
 
 void
-getKeys(void)
+menuHandleKeys(int scancode)
 {
-	keys = qcalloc(1, sizeof(struct Keys));
-	keys->key = NULL;
-	keys->is_key_allocated = 1;
-	keys->keysize = 0;
-
-	struct Parser p;
-	p.file = readKeyConf(p.filename);
-	p.lineno = 1;
-	p.i = 0;
-	if (p.file != NULL) {
-		p.c = p.file[p.i];
-		keys->key = parseKeys(&p, &keys->keysize);
+	switch (scancode) {
+	case SDL_SCANCODE_UP:
+		menuHandleKey(KEY_UP);
+		return;
+	case SDL_SCANCODE_DOWN:
+		menuHandleKey(KEY_DOWN);
+		return;
+	case SDL_SCANCODE_Q:
+		menuHandleKey(KEY_QUIT);
+		return;
+	case SDL_SCANCODE_ESCAPE:
+		menuHandleKey(KEY_PAUSE);
+		return;
+	case SDL_SCANCODE_RETURN:
+	case SDL_SCANCODE_SPACE:
+		menuHandleKey(KEY_SELECT);
+		return;
 	}
+	for (int i = 0; i < keys.keylen; i++) {
+		if (keys.key[i].key == (SDL_Scancode)scancode)
+			menuHandleKeys(keys.key[i].sym);
+	}
+}
 
-	free(p.file);
+static const Uint8 *keyboardState = NULL;
 
-	if (keys->key == NULL) {
-		keys->key = defaultkey;
-		keys->keysize = sizeof(defaultkey) / sizeof(defaultkey[0]);
-		keys->is_key_allocated = 0;
+void
+handleKeys(void)
+{
+	for (int i = 0; i < keys.keylen; i++) {
+		if (keyboardState[keys.key[i].key])
+			handleKey(keys.key[i].sym, keys.key[i].player);
 	}
 }
 
 void
 freeKeys(void)
 {
-	if (keys->is_key_allocated)
-		free(keys->key);
+	if (keys.is_key_allocated)
+		free(keys.key);
+}
 
-	free(keys);
+void
+loadConfig(void)
+{
+	keyboardState = SDL_GetKeyboardState(NULL);
+
+	char filepath[PATH_MAX];
+	getPath(filepath, "XDG_CONFIG_HOME", "/config", 0);
+	struct scfg_block block;
+	if (scfg_load_file(&block, filepath) < 0) {
+		perror(filepath);
+	};
+
+	struct Key *keylist = NULL;
+	int keylist_len = 0;
+	for (size_t i = 0; i < block.directives_len; i++) {
+		struct scfg_directive *d = &block.directives[i];
+		if (strcmp(d->name, "keys") == 0) {
+			if (d->params_len > 0) {
+				fprintf(stderr, "%s:%d: Expected 0 params got %zu params\n",
+						filepath, d->lineno, d->params_len);
+				exit(1);
+			}
+			struct scfg_block *child = &d->children;
+
+			for (size_t i = 0; i < child->directives_len; i++) {
+				struct Key key;
+				struct scfg_directive *d = &child->directives[i];
+				if (d->params_len != 2) {
+					fprintf(stderr, "%s:%d: Expected 2 params, got %zu\n",
+							filepath, d->lineno, d->params_len);
+					exit(1);
+				};
+				int sym = stringToKey(d->name);
+				if (sym < 0) {
+					fprintf(stderr, "%s:%d: Invalid directive %s\n", filepath,
+							d->lineno, d->name);
+					exit(1);
+				};
+				SDL_Scancode keycode = SDL_GetScancodeFromName(d->params[0]);
+				if (keycode == SDL_SCANCODE_UNKNOWN) {
+					fprintf(stderr, "%s:%d: Invalid name %s\n",
+							filepath, d->lineno, d->params[0]);
+					exit(1);
+				};
+				int player = atoi(d->params[1]);
+				if (player <= 0) {
+					fprintf(stderr, "%s:%d: Invalid number %s\n",
+							filepath, d->lineno, d->params[1]);
+					exit(1);
+				};
+
+				key.sym = sym;
+				key.key = keycode;
+				key.player = player-1;
+
+				keylist_len++;
+				keylist = qrealloc(keylist, keylist_len * sizeof(struct Key));
+				keylist[keylist_len-1] = key;
+			}
+		} else if (strcmp(d->name, "sprite-dir") == 0) {
+			// TODO: implement searching for sprites in user given directory
+		}
+	}
+
+	scfg_block_finish(&block);
+
+	if (keylist != NULL) {
+		keys.key = keylist;
+		keys.keylen = keylist_len;
+		keys.is_key_allocated = 1;
+	} else {
+		keys.key = defaultkey;
+		keys.keylen = sizeof(defaultkey) / sizeof(defaultkey[0]);
+		keys.is_key_allocated = 0;
+	}
 }
 
 void
 listFunc(void)
 {
-	for (int i = 0; i < (int)(sizeof(funclist) / sizeof(funclist[0])); i++)
-		printf("%s\n", funclist[i].name);
+	for (int i = 0; i < (int)(sizeof(keysList) / sizeof(keysList[0])); i++)
+		printf("%s\n", keysList[i]);
 }

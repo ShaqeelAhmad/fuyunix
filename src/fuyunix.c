@@ -17,27 +17,17 @@
  *  along with fuyunix.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-/* I don't think this is how I should do this */
-#define _POSIX_C_SOURCE 2
-
-#include <errno.h>
 #include <SDL.h>
 #include <stdbool.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <sys/stat.h>
 #include <unistd.h>
 
 #include "drw.h"
 #include "fuyunix.h"
 #include "keys.h"
 
-/* global variables */
 static bool quit = false;
 
-const Uint8 *state = NULL;
-
-/* Function definitions */
 void
 quitloop()
 {
@@ -47,15 +37,15 @@ quitloop()
 static void
 run(void)
 {
-	handleHomeMenu();
-
 	SDL_Event event;
-
 	while (!quit) {
-		handleKeys(state);
+		handleKeys();
+
 		while (SDL_PollEvent(&event) != 0) {
 			if (event.type == SDL_QUIT)
 				quitloop();
+			else if (event.type == SDL_KEYDOWN)
+				menuHandleKeys(event.key.keysym.scancode);
 		}
 		drw();
 	}
@@ -87,8 +77,6 @@ main(int argc, char *argv[])
 	}
 
 	init(flags);
-
-	state = SDL_GetKeyboardState(NULL);
 
 	run();
 

@@ -1,11 +1,10 @@
 .POSIX:
-
 include ../config.mk
 
-VERSION = `git log -1 --format=%h`
-CFLAGS += -DVERSION=\"dev-$(VERSION)\"
+VERSION = `git log -1 --format=dev-%h`
+CFLAGS += -DVERSION=\"$(VERSION)\"
 
-SRC = fuyunix.c keys.c drw.c file.c alloc.c
+SRC = fuyunix.c keys.c drw.c util.c scfg.c
 OBJ = $(SRC:.c=.o)
 
 all: fuyunix
