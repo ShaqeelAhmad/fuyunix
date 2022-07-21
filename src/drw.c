@@ -30,21 +30,22 @@
 #include "fuyunix.h"
 #include "keys.h"
 
-#define GRAVITY 6.18f
-#define JUMP_ACCEL (GRAVITY*10)
+#define GRAVITY 4.48f
+#define JUMP_LIMIT 20
+#define JUMP_ACCEL 2.4f
 #define SPEED_ACCEL 2.02f
 #define SPEED_MAX 8
 #define FRICTION 0.88f
-#define PLAYER_SIZE 1
 
 #define FRAME_NUM 3
 
 #define BOX_SIZE 25
+#define PLAYER_SIZE BOX_SIZE
 #define LOGICAL_WIDTH 800
 #define LOGICAL_HEIGHT 450
 #define STAGE_LENGTH (LOGICAL_WIDTH * 12)
 
-const SDL_Rect level[] = {
+const SDL_FRect level[] = {
 	{0, LOGICAL_HEIGHT-BOX_SIZE, STAGE_LENGTH, BOX_SIZE},
 	{3*BOX_SIZE, LOGICAL_HEIGHT - 5*BOX_SIZE, 10*BOX_SIZE, 2 * BOX_SIZE},
 	{9*BOX_SIZE, LOGICAL_HEIGHT-2*BOX_SIZE, 2*BOX_SIZE, 2*BOX_SIZE},
@@ -150,13 +151,12 @@ loadPlayerTextures(void)
 {
 	if (IMG_Init(IMG_INIT_PNG) != IMG_INIT_PNG) {
 		fprintf(stderr, "IMG_Init: %s\n", IMG_GetError());
+		exit(1);
 	}
-	if (player != NULL) {
-		free(player);
-	}
-	player = (struct Player *)qcalloc(
-			game.numplayers + 1, sizeof(struct Player));
 
+	player = (struct Player *)qrealloc(player, (game.numplayers+1) * sizeof(struct Player));
+
+	game.cam = 0;
 	for (int i = 0; i <= game.numplayers; i++) {
 		loadPlayerImages(i);
 
@@ -170,6 +170,7 @@ loadPlayerTextures(void)
 		player[i].w = PLAYER_SIZE;
 		player[i].h = PLAYER_SIZE;
 	}
+
 	IMG_Quit();
 }
 
@@ -346,26 +347,19 @@ gravityCollision(int i)
 	if (dy == 0)
 		return player[i].y;
 
-	double (*roundFunc)(double);
-	if (dy < 0)
-		roundFunc = floor;
-	else
-		roundFunc = ceil;
-
-	SDL_Rect p = {
-		(int)player[i].x,
-		(int)(player[i].y + roundFunc(dy)),
-		(int)player[i].w,
-		(int)player[i].h
+	SDL_FRect p = {
+		player[i].x,
+		player[i].y + dy,
+		player[i].w,
+		player[i].h
 	};
 	for (int j = 0; j < (int)(sizeof(level) / sizeof(level[0])); j++) {
-		if (SDL_HasIntersection(&p, &level[j])) {
-			if (dy > 0) { /* Player is going down */
-				player[i].dy = 0;
+		if (SDL_HasIntersectionF(&p, &level[j])) {
+			player[i].dy = 0;
+			if (dy > 0) { /* Player hit a platform while falling */
 				player[i].falling = 0;
 				return level[j].y - player[i].h;
-			} else if (dy < 0) { /* Player is going up */
-				player[i].dy = 0;
+			} else if (dy < 0) { /* Player bonked while jumping */
 				return level[j].y + level[j].h;
 			}
 		}
@@ -376,14 +370,14 @@ gravityCollision(int i)
 static void
 gravity(int i)
 {
-	if (player[i].dy > 5) {
-		player[i].dy = 5;
-	} else if (player[i].dy < -5) {
-		player[i].dy = -5;
+	if (player[i].dy > JUMP_LIMIT) {
+		player[i].dy = JUMP_LIMIT;
+	} else if (player[i].dy < -JUMP_LIMIT) {
+		player[i].dy = -JUMP_LIMIT;
 	}
 
 	player[i].y = gravityCollision(i);
-	player[i].dy += GRAVITY;
+	player[i].dy = GRAVITY;
 }
 
 static double
@@ -395,20 +389,15 @@ collisionDetection(int i)
 	if (dx == 0)
 		return player[i].x;
 
-	double (*roundFunc)(double);
-	if (dx < 0)
-		roundFunc = floor;
-	else
-		roundFunc = ceil;
-
-	SDL_Rect p = {
-		(int)(player[i].x + roundFunc(dx)),
-		(int)player[i].y,
-		(int)player[i].w,
-		(int)player[i].h
+	SDL_FRect p = {
+		player[i].x + dx,
+		player[i].y,
+		player[i].w,
+		player[i].h
 	};
+
 	for (int j = 0; j < (int)(sizeof(level) / sizeof(level[0])); j++) {
-		if (SDL_HasIntersection(&p, &level[j])) {
+		if (SDL_HasIntersectionF(&p, &level[j])) {
 			if (dx > 0) { /* Player is going right */
 				player[i].dx = 0;
 				return level[j].x - player[i].w;
@@ -418,6 +407,7 @@ collisionDetection(int i)
 			}
 		}
 	}
+
 	return player[i].x + dx;
 }
 
@@ -458,8 +448,8 @@ drwPlayers(void)
 {
 	for (int i = 0; i <= game.numplayers; i++) {
 		SDL_Rect playrect = {
-			player[i].x, player[i].y,
-			player[i].w*BOX_SIZE, player[i].h*BOX_SIZE
+			player[i].x - game.cam, player[i].y,
+			player[i].w, player[i].h,
 		};
 
 		/* Draw a black square in place of texture that failed to load */
@@ -482,7 +472,7 @@ drwPlatforms(void)
 	SDL_SetRenderDrawColor(game.rnd, 0xed, 0xed, 0xed, SDL_ALPHA_OPAQUE);
 	for (int i = 0; i < (int)(sizeof(level) / sizeof(level[0])); i++) {
 		SDL_Rect l;
-		l.x = (double)level[i].x;
+		l.x = (double)level[i].x - game.cam;
 		l.y = (double)level[i].y;
 		l.w = (double)level[i].w;
 		l.h = (double)level[i].h;
@@ -531,7 +521,7 @@ drw(void)
 			case 2:
 				quitloop();
 				break;
-			};
+			}
 		}
 		game.focusSelect = 0;
 
@@ -571,7 +561,6 @@ drw(void)
 		SDL_RenderFillRect(game.rnd, &r);
 		r.x = game.w / 2 + BOX_SIZE;
 		SDL_RenderFillRect(game.rnd, &r);
-
 		break;
 	}
 
