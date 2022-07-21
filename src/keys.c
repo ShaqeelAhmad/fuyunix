@@ -127,14 +127,16 @@ loadConfig(void)
 	keyboardState = SDL_GetKeyboardState(NULL);
 
 	char filepath[PATH_MAX];
-	getPath(filepath, "XDG_CONFIG_HOME", "/config", 0);
-	struct scfg_block block;
-	if (scfg_load_file(&block, filepath) < 0) {
-		perror(filepath);
-	};
-
 	struct Key *keylist = NULL;
 	int keylist_len = 0;
+	struct scfg_block block;
+
+	getPath(filepath, "XDG_CONFIG_HOME", "/config", 0);
+	if (scfg_load_file(&block, filepath) < 0) {
+		perror(filepath);
+		goto default_config;
+	};
+
 	for (size_t i = 0; i < block.directives_len; i++) {
 		struct scfg_directive *d = &block.directives[i];
 		if (strcmp(d->name, "keys") == 0) {
@@ -191,7 +193,9 @@ loadConfig(void)
 		keys.key = keylist;
 		keys.keylen = keylist_len;
 		keys.is_key_allocated = 1;
-	} else {
+	} else
+default_config:
+	{
 		keys.key = defaultkey;
 		keys.keylen = sizeof(defaultkey) / sizeof(defaultkey[0]);
 		keys.is_key_allocated = 0;
