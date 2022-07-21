@@ -19,15 +19,16 @@ I use Linux and can't guarantee that the program will work on other operating
 systems
 
 ## Goals
-* Lightweight (so my potato pc can handle it)
+* Small and works on low end / old hardware.
 * Minimal dependencies
+
+## TODO
 * Joystick / gamepad support.
+* Reading levels from a file.
+* Having special textures for stuff
 
 ## Screenshots
 TBD
-
-## Non-goals
-* Mouse support.
 
 ## Files
 `src/` directory contains the source code
@@ -57,5 +58,6 @@ CC0 for the images
 
 [GPLv3 LICENSE](LICENSE) for the source code
 
-[LICENSE.scfg](src/LICENSE.scfg) for scfg source code (specifically src/scfg.c
-and src/scfg.h) which is from https://git.sr.ht/~emersion/libscfg
+[LICENSE.scfg](src/LICENSE.scfg) for the scfg source code (specifically
+src/scfg.c and src/scfg.h) which is taken from
+https://git.sr.ht/~emersion/libscfg
