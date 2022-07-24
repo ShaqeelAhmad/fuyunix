@@ -7,9 +7,10 @@ Don't bother playing this now.
 ## Dependencies
 - c99 C compiler*
 - cairo
-- sdl2
+- sdl2 >= 2.0.22
 - sdl2_image
 - make
+- scdoc (for manpages)
 
 \* Only tcc, gcc and clang are tested.
 Other compilers might not work.
@@ -47,17 +48,16 @@ $ make
 Modify `config.mk` for configurations.
 
 ## Usage
-`-v` for version
 
-`-l` for list of functions
+Look at the manpage for options.
 
-don't pass any arguments to start the game.
+Don't pass any arguments to start the game.
 
 ## License
 CC0 for the images
 
 [GPLv3 LICENSE](LICENSE) for the source code
 
-[LICENSE.scfg](src/LICENSE.scfg) for the scfg source code (specifically
+[MIT LICENSE.scfg](src/LICENSE.scfg) for the scfg source code (specifically
 src/scfg.c and src/scfg.h) which is taken from
 https://git.sr.ht/~emersion/libscfg

@@ -8,10 +8,13 @@ all:
 clean:
 	$(MAKE) clean -C src
 
-install:
+man:
+	scdoc < fuyunix.6.scd > fuyunix.6
+
+install: man
 	$(MAKE) install -C src
 	mkdir -p $(MANDIR)
-	cp -f man/fuyunix.6 $(MANDIR)/fuyunix.6
+	cp -f fuyunix.6 $(MANDIR)/fuyunix.6
 	chmod 644 $(MANDIR)/fuyunix.6
 	mkdir -p $(DATADIR)/fuyunix/
 	cp -rf data/ $(DATADIR)/fuyunix/
