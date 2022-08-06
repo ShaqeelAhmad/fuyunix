@@ -47,6 +47,7 @@ run(void)
 			else if (event.type == SDL_KEYDOWN)
 				menuHandleKeys(event.key.keysym.scancode);
 		}
+
 		drw();
 	}
 }

@@ -25,14 +25,16 @@
 #include <SDL_image.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdint.h>
+#include <time.h>
 
 #include "util.h"
 #include "fuyunix.h"
 #include "keys.h"
 
-#define GRAVITY 4.48f
-#define JUMP_LIMIT 20
-#define JUMP_ACCEL 2.4f
+#define GRAVITY 5.48f
+#define JUMP_LIMIT 40
+#define JUMP_ACCEL 90.4f
 #define SPEED_ACCEL 2.02f
 #define SPEED_MAX 8
 #define FRICTION 0.88f
@@ -83,9 +85,14 @@ struct Game {
 	int focusChange;
 	int menuFocus;
 
+	struct timespec time[2];
+	int curtime;
+	double dt;
+
 	int h;
 	int w;
 
+	double fps;
 	double cam;
 
 	double scale;
@@ -201,7 +208,29 @@ initVariables()
 
 	game.cam = 0;
 
+	game.curtime = 0;
+	clock_gettime(CLOCK_MONOTONIC, &game.time[0]);
+	game.time[1] = game.time[0];
+
+	game.fps = 1.0 / 6.0; // TODO: get the fps from the current display?
+
 	player = NULL;
+
+	int i = SDL_GetWindowDisplayIndex(game.win);
+	if (i < 0) {
+		fprintf(stderr, "Unable to get display index: %s\n", SDL_GetError());
+		return;
+	}
+
+	SDL_DisplayMode dm;
+	if (SDL_GetCurrentDisplayMode(i, &dm) < 0) {
+		fprintf(stderr, "Unable to get display mode: %s\n", SDL_GetError());
+		return;
+	}
+	game.fps = 1.0 / (double)dm.refresh_rate;
+
+
+
 }
 
 void
@@ -315,11 +344,13 @@ right(int i)
 {
 	i = i > game.numplayers ? 0 : i;
 
-	if (player[i].x + player[i].w >= LOGICAL_WIDTH)
+	if (player[i].x + player[i].w >= STAGE_LENGTH)
 		return;
 
 	if (player[i].dx < SPEED_MAX)
 		player[i].dx += SPEED_ACCEL;
+	else
+		player[i].dx = SPEED_MAX;
 
 	player[i].current = &player[i].frame[1];
 }
@@ -368,7 +399,7 @@ gravityCollision(int i)
 }
 
 static void
-gravity(int i)
+gravity(int i, double dt)
 {
 	if (player[i].dy > JUMP_LIMIT) {
 		player[i].dy = JUMP_LIMIT;
@@ -376,7 +407,7 @@ gravity(int i)
 		player[i].dy = -JUMP_LIMIT;
 	}
 
-	player[i].y = gravityCollision(i);
+	player[i].y = gravityCollision(i);// * dt;
 	player[i].dy = GRAVITY;
 }
 
@@ -412,34 +443,42 @@ collisionDetection(int i)
 }
 
 static void
-movePlayers(void)
+movePlayers(int64_t dt)
 {
+	double total_x = 0;
+
 	/* TODO: Player-Player collision */
 	for (int i = 0; i <= game.numplayers; i++) {
-		gravity(i);
+		gravity(i, dt);
 
 		if ((player[i].x <= 0 && player[i].dx < 0)
-				|| (player[i].x + player[i].w >= LOGICAL_WIDTH
+				|| (player[i].x + player[i].w >= STAGE_LENGTH
 					&& player[i].dx > 0)) {
 			player[i].dx = 0;
-		}
-
-		/* TODO: fix the camera for 2 player mode and make scrolling smoother */
-		double playerPos = player[i].x - game.cam;
-		double rightScrollPos = LOGICAL_WIDTH * 0.8;
-		double leftScrollPos = LOGICAL_WIDTH * 0.2;
-		if (playerPos + player[i].w > rightScrollPos) {
-			game.cam += playerPos + player[i].w - rightScrollPos;
-		} else if (playerPos <= leftScrollPos && game.cam != 0) {
-			game.cam -=  leftScrollPos - playerPos;
 		}
 
 		if (player[i].dx >= -0.05 && player[i].dx <= 0.05) {
 			player[i].current = &player[i].frame[0];
 		}
 
-		player[i].dx = player[i].dx * FRICTION;
+		player[i].dx = player[i].dx * FRICTION;// * dt;
 		player[i].x = collisionDetection(i);
+
+
+		/* TODO: 2 player mode. Don't allow players to go offscreen */
+		if (player[i].x + player[i].w >= STAGE_LENGTH || player[i].x <= 0) {
+			player[i].dx = 0;
+		}
+
+		total_x += player[i].x;
+	}
+
+	double avg_x = total_x / (double)(game.numplayers + 1);
+
+	if (avg_x > LOGICAL_WIDTH / 2 && avg_x < STAGE_LENGTH - LOGICAL_WIDTH / 2) {
+		if (avg_x - game.cam < -0.9 || avg_x - game.cam > 0.9) {
+			game.cam = avg_x - (LOGICAL_WIDTH / 2);
+		}
 	}
 }
 
@@ -536,7 +575,7 @@ drw(void)
 		SDL_SetRenderDrawColor(game.rnd, 0x11, 0x41, 0x61, SDL_ALPHA_OPAQUE);
 		SDL_RenderFillRect(game.rnd, &screenRect);
 
-		movePlayers();
+		movePlayers(game.dt);
 
 		drwPlatforms();
 		drwPlayers();
@@ -563,6 +602,26 @@ drw(void)
 		SDL_RenderFillRect(game.rnd, &r);
 		break;
 	}
+
+#define SECOND 1e9
+
+	clock_gettime(CLOCK_MONOTONIC, &game.time[game.curtime]);
+	struct timespec *t1 = &game.time[game.curtime];
+	struct timespec *t2 = &game.time[!game.curtime];
+	int64_t diff = ((t1->tv_sec - t2->tv_sec) * SECOND)
+		+ t1->tv_nsec - t2->tv_nsec;
+
+	game.curtime = !game.curtime;
+
+	game.dt = (double)diff * 1e-6;
+
+	if (game.dt < game.fps) {
+		SDL_Delay(game.fps - game.dt);
+	}
+
+	clock_gettime(CLOCK_MONOTONIC, &game.time[game.curtime]);
+	game.curtime = !game.curtime;
+
 
 	SDL_RenderPresent(game.rnd);
 }

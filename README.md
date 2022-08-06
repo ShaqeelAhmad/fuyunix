@@ -1,8 +1,8 @@
 # Fuyunix
+
 A small platformer game using SDL2
 
-Note: This game is still under development (alpha stage).
-Don't bother playing this now.
+Note: This game is still under development.
 
 ## Dependencies
 - c99 C compiler*
