@@ -1,5 +1,4 @@
 .POSIX:
-
 include config.mk
 
 all:
@@ -7,6 +6,7 @@ all:
 
 clean:
 	$(MAKE) clean -C src
+	rm -f fuyunix.6
 
 man:
 	scdoc < fuyunix.6.scd > fuyunix.6

@@ -179,7 +179,7 @@ loadConfig(void)
 				key.player = player-1;
 
 				keylist_len++;
-				keylist = qrealloc(keylist, keylist_len * sizeof(struct Key));
+				keylist = erealloc(keylist, keylist_len * sizeof(struct Key));
 				keylist[keylist_len-1] = key;
 			}
 		} else if (strcmp(d->name, "sprite-dir") == 0) {

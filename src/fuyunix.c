@@ -29,7 +29,7 @@
 static bool quit = false;
 
 void
-quitloop()
+quitloop(void)
 {
 	quit = true;
 }

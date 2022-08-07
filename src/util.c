@@ -102,7 +102,7 @@ writeSaveFile(int level)
 }
 
 void *
-qcalloc(size_t nmemb, size_t size)
+ecalloc(size_t nmemb, size_t size)
 {
 	void *p = calloc(nmemb, size);
 	if (p == NULL) {
@@ -114,7 +114,7 @@ qcalloc(size_t nmemb, size_t size)
 }
 
 void *
-qrealloc(void *ptr, size_t size)
+erealloc(void *ptr, size_t size)
 {
 	void *p = realloc(ptr, size);
 	if (p == NULL) {

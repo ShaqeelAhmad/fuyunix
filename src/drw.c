@@ -31,10 +31,10 @@
 #include "util.h"
 #include "fuyunix.h"
 #include "keys.h"
+#include "scfg.h"
 
-#define GRAVITY 5.48f
-#define JUMP_LIMIT 40
-#define JUMP_ACCEL 90.4f
+#define GRAVITY 4.48f
+#define JUMP_ACCEL 30
 #define SPEED_ACCEL 2.02f
 #define SPEED_MAX 8
 #define FRICTION 0.88f
@@ -47,16 +47,15 @@
 #define LOGICAL_HEIGHT 450
 #define STAGE_LENGTH (LOGICAL_WIDTH * 12)
 
-const SDL_FRect level[] = {
-	{0, LOGICAL_HEIGHT-BOX_SIZE, STAGE_LENGTH, BOX_SIZE},
-	{3*BOX_SIZE, LOGICAL_HEIGHT - 5*BOX_SIZE, 10*BOX_SIZE, 2 * BOX_SIZE},
-	{9*BOX_SIZE, LOGICAL_HEIGHT-2*BOX_SIZE, 2*BOX_SIZE, 2*BOX_SIZE},
-};
+static SDL_FRect *level;
+static size_t level_sz;
+
 
 enum GameState {
 	STATE_MENU,
 	STATE_PLAY,
 	STATE_PAUSE,
+	STATE_DEAD,
 };
 
 struct Player {
@@ -103,7 +102,7 @@ struct Game {
 static struct Game game;
 static struct Player *player;
 
-void
+static void
 negativeDie(int x)
 {
 	if (x < 0) {
@@ -112,7 +111,7 @@ negativeDie(int x)
 	}
 }
 
-void *
+static void *
 nullDie(void *p)
 {
 	if (p == NULL) {
@@ -161,7 +160,7 @@ loadPlayerTextures(void)
 		exit(1);
 	}
 
-	player = (struct Player *)qrealloc(player, (game.numplayers+1) * sizeof(struct Player));
+	player = erealloc(player, (game.numplayers+1) * sizeof(struct Player));
 
 	game.cam = 0;
 	for (int i = 0; i <= game.numplayers; i++) {
@@ -194,9 +193,46 @@ freePlayerTextures(void)
 	free(player);
 }
 
+static void
+loadLevels(void)
+{
+	struct scfg_block block;
+
+	// TODO: Allow loading levels from $XDG_DATA_HOME
+	if (scfg_load_file(&block, LEVELS_DIR"/1") < 0) {
+		perror(LEVELS_DIR"/1");
+		exit(1);
+	}
+
+	// TODO: free the allocated memory
+
+	level = ecalloc(block.directives_len, sizeof(SDL_FRect));
+	level_sz = 0;
+	for (size_t i = 0; i < block.directives_len; ++i) {
+		if (block.directives[i].params_len != 3) {
+			fprintf(stderr, "%s:%d Expected 4 got %zu\n", "./level-1",
+					block.directives[i].lineno,
+					block.directives[i].params_len);
+		};
+		int coords[4] = {0};
+		coords[0] = atoi(block.directives[i].name) * BOX_SIZE;
+		coords[1] = atoi(block.directives[i].params[0]) * BOX_SIZE;
+		coords[2] = atoi(block.directives[i].params[1]) * BOX_SIZE;
+		coords[3] = atoi(block.directives[i].params[2]) * BOX_SIZE;
+
+		level[level_sz] = (SDL_FRect){
+			(float)coords[0],
+			(float)coords[1],
+			(float)coords[2],
+			(float)coords[3],
+		};
+		level_sz++;
+	}
+	scfg_block_finish(&block);
+}
 
 static void
-initVariables()
+initVariables(void)
 {
 	game.state = STATE_MENU;
 	game.level = readSaveFile();
@@ -229,8 +265,7 @@ initVariables()
 	}
 	game.fps = 1.0 / (double)dm.refresh_rate;
 
-
-
+	loadLevels();
 }
 
 void
@@ -258,6 +293,8 @@ cleanup(void)
 	freeKeys();
 
 	freePlayerTextures();
+
+	free(level);
 
 	writeSaveFile(game.level);
 
@@ -334,7 +371,7 @@ jump(int i)
 	if (player[i].falling)
 		return;
 
-	player[i].dy = -JUMP_ACCEL;
+	player[i].dy -= JUMP_ACCEL;
 
 	player[i].falling = 1;
 }
@@ -384,7 +421,7 @@ gravityCollision(int i)
 		player[i].w,
 		player[i].h
 	};
-	for (int j = 0; j < (int)(sizeof(level) / sizeof(level[0])); j++) {
+	for (size_t j = 0; j < level_sz; j++) {
 		if (SDL_HasIntersectionF(&p, &level[j])) {
 			player[i].dy = 0;
 			if (dy > 0) { /* Player hit a platform while falling */
@@ -401,14 +438,16 @@ gravityCollision(int i)
 static void
 gravity(int i, double dt)
 {
-	if (player[i].dy > JUMP_LIMIT) {
-		player[i].dy = JUMP_LIMIT;
-	} else if (player[i].dy < -JUMP_LIMIT) {
-		player[i].dy = -JUMP_LIMIT;
+	if (player[i].dy > GRAVITY) {
+		player[i].dy = GRAVITY;
 	}
 
-	player[i].y = gravityCollision(i);// * dt;
-	player[i].dy = GRAVITY;
+	player[i].y = gravityCollision(i);
+	player[i].dy += GRAVITY;
+
+	if (player[i].y > LOGICAL_HEIGHT) {
+		game.state = STATE_DEAD;
+	}
 }
 
 static double
@@ -427,7 +466,7 @@ collisionDetection(int i)
 		player[i].h
 	};
 
-	for (int j = 0; j < (int)(sizeof(level) / sizeof(level[0])); j++) {
+	for (size_t j = 0; j < level_sz; j++) {
 		if (SDL_HasIntersectionF(&p, &level[j])) {
 			if (dx > 0) { /* Player is going right */
 				player[i].dx = 0;
@@ -509,7 +548,7 @@ static void
 drwPlatforms(void)
 {
 	SDL_SetRenderDrawColor(game.rnd, 0xed, 0xed, 0xed, SDL_ALPHA_OPAQUE);
-	for (int i = 0; i < (int)(sizeof(level) / sizeof(level[0])); i++) {
+	for (size_t i = 0; i < level_sz; i++) {
 		SDL_Rect l;
 		l.x = (double)level[i].x - game.cam;
 		l.y = (double)level[i].y;
@@ -580,6 +619,10 @@ drw(void)
 		drwPlatforms();
 		drwPlayers();
 		break;
+	case STATE_DEAD:
+		// TODO: Let the user know that they died, and perhaps restart it?
+
+		/* FALLTHROUGH */
 	case STATE_PAUSE:
 		SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, SDL_ALPHA_OPAQUE);
 		SDL_RenderClear(game.rnd);
@@ -659,6 +702,8 @@ menuHandleKey(int sym)
 			break;
 		};
 		break;
+	case STATE_DEAD:
+		/* FALLTHROUGH */
 	case STATE_PAUSE:
 		switch (sym) {
 		case KEY_UP:
@@ -691,7 +736,8 @@ void
 handleKey(int sym, int player)
 {
 	switch (game.state) {
-	case STATE_MENU:
+	case STATE_DEAD: /* FALLTHROUGH */
+	case STATE_MENU: /* FALLTHROUGH */
 	case STATE_PAUSE:
 		break;
 	case STATE_PLAY:
