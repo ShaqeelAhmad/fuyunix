@@ -100,7 +100,7 @@ struct Game {
 };
 
 static struct Game game;
-static struct Player *player;
+static struct Player player[2];
 
 static void
 negativeDie(int x)
@@ -160,8 +160,6 @@ loadPlayerTextures(void)
 		exit(1);
 	}
 
-	player = erealloc(player, (game.numplayers+1) * sizeof(struct Player));
-
 	game.cam = 0;
 	for (int i = 0; i <= game.numplayers; i++) {
 		loadPlayerImages(i);
@@ -183,14 +181,9 @@ loadPlayerTextures(void)
 static void
 freePlayerTextures(void)
 {
-	if (player == NULL)
-		return;
-
 	for (int i = 0; i <= game.numplayers; i++)
 		for (int frame = 0; frame < FRAME_NUM; frame++)
 			SDL_DestroyTexture(player[i].frame[frame]);
-
-	free(player);
 }
 
 static void
