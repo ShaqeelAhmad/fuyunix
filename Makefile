@@ -1,18 +1,21 @@
 .POSIX:
 include config.mk
 
-all:
-	$(MAKE) -C src
+all: fuyunix man
 
 clean:
-	$(MAKE) clean -C src
 	rm -f fuyunix.6
+	rm -f fuyunix
 
-man:
+man: fuyunix.6
+
+fuyunix.6:
 	scdoc < fuyunix.6.scd > fuyunix.6
 
-install: man
-	$(MAKE) install -C src
+install: all
+	mkdir -p $(BINDIR)
+	cp -f fuyunix $(BINDIR)
+	chmod 755 $(BINDIR)/fuyunix
 	mkdir -p $(MANDIR)
 	cp -f fuyunix.6 $(MANDIR)/fuyunix.6
 	chmod 644 $(MANDIR)/fuyunix.6
@@ -20,8 +23,11 @@ install: man
 	cp -rf data/ $(DATADIR)/fuyunix/
 
 uninstall:
-	$(MAKE) uninstall -C src
+	rm -f $(BINDIR)/fuyunix
 	rm -f $(MANDIR)/fuyunix.6
 	rm -rf $(DATADIR)/fuyunix
+
+fuyunix: src/*.c
+	$(CC) -o $@ $(CFLAGS) $(LDFLAGS) src/*.c
 
 .PHONY: clean install uninstall

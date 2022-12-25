@@ -1,4 +1,4 @@
 config.mk
 fuyunix.6
 src/*.o
-src/fuyunix
+fuyunix

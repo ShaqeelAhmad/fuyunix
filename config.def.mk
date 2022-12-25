@@ -9,13 +9,16 @@ CC = cc
 
 CFLAGS = -g -Wall -Werror -pedantic -Wextra -std=c99 -Wno-unused-parameter
 
+VERSION = `git log -1 --format=dev-%h`
+
 CFLAGS += -D_POSIX_C_SOURCE=200809L \
 		  -DRESOURCE_PATH=\"$(RESOURCE_PATH)\" \
 		  -DLEVELS_DIR=\"$(LEVELS_DIR)\" \
-		  `pkg-config --cflags cairo` `sdl2-config --cflags`
+		  -DVERSION=\"$(VERSION)\" \
+		  `pkg-config --cflags cairo sdl2`
 
 ## Disable cpu specific vector operations which doesn't work on certain
-## compilers. I'm not using these features so it shouldn't change anything.
+## compilers.
 CFLAGS += -DSDL_DISABLE_IMMINTRIN_H
 
-LDFLAGS = `pkg-config --libs cairo SDL2_image` `sdl2-config --libs` -lm
+LDFLAGS = `pkg-config --libs cairo SDL2_image sdl2` -lm
