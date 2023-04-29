@@ -46,6 +46,8 @@ run(void)
 				quitloop();
 			else if (event.type == SDL_KEYDOWN)
 				menuHandleKeys(event.key.keysym.scancode);
+			else if (event.type == SDL_KEYUP)
+				handleKeyups(event.key.keysym.scancode);
 		}
 
 		drw();

@@ -1,8 +1,8 @@
 # Fuyunix
 
-A small platformer game using SDL2
+**NOTE: this game is still under early stages of development**
 
-Note: This game is still under development.
+A small platformer game using SDL2
 
 ## Dependencies
 - c99 C compiler*
@@ -16,19 +16,23 @@ Note: This game is still under development.
 Other compilers might not work.
 
 ## Portablility
+
 I use Linux and can't guarantee that the program will work on other operating
 systems
 
 ## Goals
+
 * Small and works on low end / old hardware.
 * Minimal dependencies
 
 ## TODO
+
 * Joystick / gamepad support.
 * Reading levels from a file.
 * Having special textures for stuff
 
 ## Screenshots
+
 TBD
 
 ## Files

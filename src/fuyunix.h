@@ -3,6 +3,6 @@
 
 #define NAME "fuyunix"
 
-void quitloop();
+void quitloop(void);
 
 #endif /* _FUYUNIX_H_ */

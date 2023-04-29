@@ -33,23 +33,36 @@
 #include "keys.h"
 #include "scfg.h"
 
-#define GRAVITY 4.48f
-#define JUMP_ACCEL 30
+#define GRAVITY 3.48f
+#define TERMINAL_VELOCITY (GRAVITY * 2.8)
+#define JUMP_ACCEL 8
 #define SPEED_ACCEL 2.02f
 #define SPEED_MAX 8
-#define FRICTION 0.88f
+#define FRICTION 0.78f
 
 #define FRAME_NUM 3
 
-#define BOX_SIZE 25
-#define PLAYER_SIZE BOX_SIZE
+#define BLOCK_SIZE 32
+#define PLAYER_SIZE BLOCK_SIZE
 #define LOGICAL_WIDTH 800
 #define LOGICAL_HEIGHT 450
-#define STAGE_LENGTH (LOGICAL_WIDTH * 12)
+#define MAX_STAGE_LENGTH (LOGICAL_WIDTH * 12)
 
-static SDL_FRect *level;
-static size_t level_sz;
+size_t stage_length = MAX_STAGE_LENGTH;
 
+struct Region {
+	char *name;
+	SDL_Texture *t;
+	SDL_Rect rect;
+};
+
+struct Level {
+	size_t stage_length;
+	struct Region *regions;
+	size_t regions_len;
+};
+
+struct Level level;
 
 enum GameState {
 	STATE_MENU,
@@ -71,7 +84,7 @@ struct Player {
 	double w;
 	double h;
 
-	int falling;
+	bool inAir;
 };
 
 struct Game {
@@ -102,6 +115,46 @@ struct Game {
 static struct Game game;
 static struct Player player[2];
 
+struct TileTexture {
+	char *name;
+	SDL_Texture *tile;
+};
+
+static struct TileTexture tileTextures[] = {
+	{.name = "snow"},
+};
+
+void
+initTileTextures(void)
+{
+	char *tileDir = GAME_DATA_DIR"/tiles/";
+	char *ext = ".png";
+	char tileFile[PATH_MAX];
+	for (size_t i = 0; i < (sizeof(tileTextures) / sizeof(tileTextures[0])); i++) {
+		struct TileTexture *t = &tileTextures[i];
+		strcpy(tileFile, tileDir);
+		strcat(tileFile, t->name);
+		strcat(tileFile, ext);
+		t->tile = IMG_LoadTexture(game.rnd, tileFile);
+		if (t->tile == NULL) {
+			fprintf(stderr, "can't load tile %s from file %s", t->name, tileFile);
+			continue;
+		}
+	}
+}
+
+SDL_Texture *
+getTileTexture(char *s)
+{
+	for (size_t i = 0; i < sizeof(tileTextures) / sizeof(tileTextures[0]); i++) {
+		struct TileTexture *t = &tileTextures[i];
+		if (strcmp(t->name, s) == 0) {
+			return t->tile;
+		}
+	}
+	return NULL;
+}
+
 static void
 negativeDie(int x)
 {
@@ -124,7 +177,7 @@ nullDie(void *p)
 static void
 formatPath(char *path, char *resPath, int i, int frame)
 {
-	if (sprintf(path, "%s%s%d%s%d%s", resPath, "/fuyunix/data/", i,
+	if (sprintf(path, "%s%d%s%d%s", resPath, i,
 				"/sprite-", frame, ".png") < 0) {
 		perror("sprintf: ");
 	};
@@ -141,7 +194,7 @@ loadPlayerImages(int i)
 		player[i].frame[frame] = IMG_LoadTexture(game.rnd, path);
 
 		if (player[i].frame[frame] == NULL) {
-			formatPath(path, RESOURCE_PATH, i, frame);
+			formatPath(path, GAME_DATA_DIR, i, frame);
 			player[i].frame[frame] = IMG_LoadTexture(game.rnd, path);
 
 			if (player[i].frame[frame] == NULL) {
@@ -166,6 +219,7 @@ loadPlayerTextures(void)
 
 		player[i].current = &player[i].frame[0];
 
+		// TODO: don't zero it unless necessary
 		player[i].x  = 0;
 		player[i].y  = 0;
 		player[i].dx = 0;
@@ -191,35 +245,69 @@ loadLevels(void)
 {
 	struct scfg_block block;
 
+	char *levelPath = GAME_DATA_DIR"/levels/1";
+
 	// TODO: Allow loading levels from $XDG_DATA_HOME
-	if (scfg_load_file(&block, LEVELS_DIR"/1") < 0) {
-		perror(LEVELS_DIR"/1");
+	if (scfg_load_file(&block, levelPath) < 0) {
+		perror(levelPath);
 		exit(1);
 	}
 
-	// TODO: free the allocated memory
-
-	level = ecalloc(block.directives_len, sizeof(SDL_FRect));
-	level_sz = 0;
+	level.regions = ecalloc(block.directives_len, sizeof(struct Region));
+	level.regions_len = 0;
+	level.stage_length = MAX_STAGE_LENGTH;
 	for (size_t i = 0; i < block.directives_len; ++i) {
-		if (block.directives[i].params_len != 3) {
-			fprintf(stderr, "%s:%d Expected 4 got %zu\n", "./level-1",
+		if (strcmp(block.directives[i].name, "stage_length") == 0) {
+			if (block.directives[i].params_len != 1) {
+				fprintf(stderr, "%s:%d Expected 1 field for stage_length got %zu\n",
+						levelPath,
+						block.directives[i].lineno,
+						block.directives[i].params_len);
+			}
+			level.stage_length = atoi(block.directives[i].params[0]);
+			if (level.stage_length <= 0 || level.stage_length > MAX_STAGE_LENGTH)
+				level.stage_length = MAX_STAGE_LENGTH;
+			else
+				level.stage_length *= BLOCK_SIZE;
+			continue;
+		}
+
+		if (block.directives[i].params_len != 4) {
+			fprintf(stderr, "%s:%d Expected 5 fields got %zu\n", levelPath,
 					block.directives[i].lineno,
 					block.directives[i].params_len);
+			continue;
 		};
-		int coords[4] = {0};
-		coords[0] = atoi(block.directives[i].name) * BOX_SIZE;
-		coords[1] = atoi(block.directives[i].params[0]) * BOX_SIZE;
-		coords[2] = atoi(block.directives[i].params[1]) * BOX_SIZE;
-		coords[3] = atoi(block.directives[i].params[2]) * BOX_SIZE;
 
-		level[level_sz] = (SDL_FRect){
-			(float)coords[0],
-			(float)coords[1],
-			(float)coords[2],
-			(float)coords[3],
+		SDL_Texture *t = getTileTexture(block.directives[i].name);
+		if (t == NULL) {
+			fprintf(stderr, "%s:%d: unknown tile %s\n", levelPath,
+					block.directives[i].lineno,
+					block.directives[i].name);
+			continue;
+		}
+
+		int coords[4] = {0};
+		coords[0] = atoi(block.directives[i].params[0]) * BLOCK_SIZE;
+		coords[1] = atoi(block.directives[i].params[1]) * BLOCK_SIZE;
+		coords[2] = atoi(block.directives[i].params[2]) * BLOCK_SIZE;
+		coords[3] = atoi(block.directives[i].params[3]) * BLOCK_SIZE;
+
+		level.regions[level.regions_len] = (struct Region){
+			.t = t,
+			.rect = (SDL_Rect){
+				coords[0],
+				coords[1],
+				coords[2],
+				coords[3],
+			},
 		};
-		level_sz++;
+		level.regions_len++;
+	}
+	stage_length = level.stage_length;
+	if (level.regions_len == 0) {
+		fprintf(stderr, "Unable to read any data from file %s\n", levelPath);
+		exit(1);
 	}
 	scfg_block_finish(&block);
 }
@@ -241,9 +329,7 @@ initVariables(void)
 	clock_gettime(CLOCK_MONOTONIC, &game.time[0]);
 	game.time[1] = game.time[0];
 
-	game.fps = 1.0 / 6.0; // TODO: get the fps from the current display?
-
-	player = NULL;
+	game.fps = 1.0 / 60.0;
 
 	int i = SDL_GetWindowDisplayIndex(game.win);
 	if (i < 0) {
@@ -258,6 +344,7 @@ initVariables(void)
 	}
 	game.fps = 1.0 / (double)dm.refresh_rate;
 
+	initTileTextures();
 	loadLevels();
 }
 
@@ -287,7 +374,8 @@ cleanup(void)
 
 	freePlayerTextures();
 
-	free(level);
+	free(level.regions);
+	level.regions_len = 0;
 
 	writeSaveFile(game.level);
 
@@ -298,7 +386,7 @@ cleanup(void)
 }
 
 static void
-drwMenuText(SDL_Surface *s, char *text, int x, int y, double size)
+drwText(SDL_Surface *s, char *text, int x, int y, double size)
 {
 	cairo_surface_t *cSurface = cairo_image_surface_create_for_data(
 			(unsigned char *)s->pixels, CAIRO_FORMAT_RGB24,
@@ -339,13 +427,13 @@ drwHomeMenu(SDL_Surface *s, int gaps, int focus, int size, int width, int height
 
 	double textSize = 32.0;
 	double offset = height / 2;
-	drwMenuText(s, NAME, gaps*2, offset, textSize*2);
+	drwText(s, NAME, gaps*2, offset, textSize*2);
 
 	offset += gaps;
-	drwMenuText(s, "Start", gaps * 2, offset + size, textSize);
-	drwMenuText(s, "Choose players", gaps * 2, offset + size * 2, textSize);
-	drwMenuText(s, nplayer, width - gaps * 2, offset + size * 2, textSize);
-	drwMenuText(s, "Exit", gaps*2, offset + size * 3, textSize);
+	drwText(s, "Start", gaps * 2, offset + size, textSize);
+	drwText(s, "Choose players", gaps * 2, offset + size * 2, textSize);
+	drwText(s, nplayer, width - gaps * 2, offset + size * 2, textSize);
+	drwText(s, "Exit", gaps*2, offset + size * 3, textSize);
 
 	return SDL_CreateTextureFromSurface(game.rnd, s);;
 }
@@ -357,16 +445,26 @@ down(int i)
 }
 
 void
-jump(int i)
+jump(int i, bool keyReleased)
 {
-	i = i > game.numplayers ? 0 : i;
+	static bool jumpHigher = false;
 
-	if (player[i].falling)
+#define MIN_PLAYER_DY (-JUMP_ACCEL * 2)
+	if (keyReleased || player[i].dy < MIN_PLAYER_DY) {
+		jumpHigher = false;
 		return;
+	}
+	if (!jumpHigher && !player[i].inAir) {
+		jumpHigher = true;
+	}
 
-	player[i].dy -= JUMP_ACCEL;
+	if (jumpHigher) {
+		i = i > game.numplayers ? 0 : i;
 
-	player[i].falling = 1;
+		player[i].dy -= JUMP_ACCEL;
+
+		player[i].inAir = true;
+	}
 }
 
 void
@@ -374,7 +472,7 @@ right(int i)
 {
 	i = i > game.numplayers ? 0 : i;
 
-	if (player[i].x + player[i].w >= STAGE_LENGTH)
+	if (player[i].x + player[i].w >= stage_length)
 		return;
 
 	if (player[i].dx < SPEED_MAX)
@@ -414,25 +512,35 @@ gravityCollision(int i)
 		player[i].w,
 		player[i].h
 	};
-	for (size_t j = 0; j < level_sz; j++) {
-		if (SDL_HasIntersectionF(&p, &level[j])) {
+	for (size_t j = 0; j < level.regions_len; j++) {
+		SDL_FRect r = {
+			.x = (float)level.regions[j].rect.x,
+			.y = (float)level.regions[j].rect.y,
+			.w = (float)level.regions[j].rect.w,
+			.h = (float)level.regions[j].rect.h,
+		};
+		if (SDL_HasIntersectionF(&p, &r)) {
 			player[i].dy = 0;
 			if (dy > 0) { /* Player hit a platform while falling */
-				player[i].falling = 0;
-				return level[j].y - player[i].h;
+				player[i].inAir = false;
+				return r.y - player[i].h;
 			} else if (dy < 0) { /* Player bonked while jumping */
-				return level[j].y + level[j].h;
+				return r.y + r.h;
 			}
 		}
 	}
+	if (dy > 0) {
+		player[i].inAir = true;
+	}
+
 	return player[i].y + dy;
 }
 
 static void
 gravity(int i, double dt)
 {
-	if (player[i].dy > GRAVITY) {
-		player[i].dy = GRAVITY;
+	if (player[i].dy > TERMINAL_VELOCITY) {
+		player[i].dy = TERMINAL_VELOCITY;
 	}
 
 	player[i].y = gravityCollision(i);
@@ -459,14 +567,20 @@ collisionDetection(int i)
 		player[i].h
 	};
 
-	for (size_t j = 0; j < level_sz; j++) {
-		if (SDL_HasIntersectionF(&p, &level[j])) {
+	for (size_t j = 0; j < level.regions_len; j++) {
+		SDL_FRect r = {
+			.x = (float)level.regions[j].rect.x,
+			.y = (float)level.regions[j].rect.y,
+			.w = (float)level.regions[j].rect.w,
+			.h = (float)level.regions[j].rect.h,
+		};
+		if (SDL_HasIntersectionF(&p, &r)) {
 			if (dx > 0) { /* Player is going right */
 				player[i].dx = 0;
-				return level[j].x - player[i].w;
+				return r.x - player[i].w;
 			} else if (dx < 0) { /* Player is going left */
 				player[i].dx = 0;
-				return level[j].x + level[j].w;
+				return r.x + r.w;
 			}
 		}
 	}
@@ -484,7 +598,7 @@ movePlayers(int64_t dt)
 		gravity(i, dt);
 
 		if ((player[i].x <= 0 && player[i].dx < 0)
-				|| (player[i].x + player[i].w >= STAGE_LENGTH
+				|| (player[i].x + player[i].w >= stage_length
 					&& player[i].dx > 0)) {
 			player[i].dx = 0;
 		}
@@ -498,7 +612,7 @@ movePlayers(int64_t dt)
 
 
 		/* TODO: 2 player mode. Don't allow players to go offscreen */
-		if (player[i].x + player[i].w >= STAGE_LENGTH || player[i].x <= 0) {
+		if (player[i].x + player[i].w >= stage_length || player[i].x <= 0) {
 			player[i].dx = 0;
 		}
 
@@ -507,7 +621,7 @@ movePlayers(int64_t dt)
 
 	double avg_x = total_x / (double)(game.numplayers + 1);
 
-	if (avg_x > LOGICAL_WIDTH / 2 && avg_x < STAGE_LENGTH - LOGICAL_WIDTH / 2) {
+	if (avg_x > LOGICAL_WIDTH / 2 && avg_x < stage_length - LOGICAL_WIDTH / 2) {
 		if (avg_x - game.cam < -0.9 || avg_x - game.cam > 0.9) {
 			game.cam = avg_x - (LOGICAL_WIDTH / 2);
 		}
@@ -540,24 +654,47 @@ drwPlayers(void)
 static void
 drwPlatforms(void)
 {
-	SDL_SetRenderDrawColor(game.rnd, 0xed, 0xed, 0xed, SDL_ALPHA_OPAQUE);
-	for (size_t i = 0; i < level_sz; i++) {
-		SDL_Rect l;
-		l.x = (double)level[i].x - game.cam;
-		l.y = (double)level[i].y;
-		l.w = (double)level[i].w;
-		l.h = (double)level[i].h;
+	for (size_t i = 0; i < level.regions_len; i++) {
+		SDL_Rect r = {
+			.x = level.regions[i].rect.x - game.cam,
+			.y = level.regions[i].rect.y,
+			.w = level.regions[i].rect.w,
+			.h = level.regions[i].rect.h,
+		};
 
-		SDL_RenderFillRect(game.rnd, &l);
+		if (r.x > LOGICAL_WIDTH) {
+			continue;
+		}
+
+		for (int y = r.y; y < r.y + r.h; y += BLOCK_SIZE) {
+			SDL_Rect f = r;
+			f.y = y;
+			f.h = BLOCK_SIZE;
+
+			if (y + BLOCK_SIZE < 0 || y > LOGICAL_HEIGHT) {
+				continue;
+			}
+			for (int x = r.x; x < r.x + r.w; x += BLOCK_SIZE) {
+				if (x + BLOCK_SIZE < 0 || x > LOGICAL_WIDTH) {
+					continue;
+				}
+				f.x = x;
+				f.w = BLOCK_SIZE;
+
+				SDL_RenderCopy(game.rnd, level.regions[i].t, NULL, &f);
+			}
+		}
 	}
-
-	SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, SDL_ALPHA_OPAQUE);
 }
 
 void
 drw(void)
 {
 	SDL_Rect screenRect = {0, 0, game.w, game.h};
+
+	static int death_alpha = 0;
+	if (game.state != STATE_DEAD) death_alpha = 0;
+
 	switch (game.state) {
 	case STATE_MENU:
 		SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, SDL_ALPHA_OPAQUE);
@@ -612,10 +749,41 @@ drw(void)
 		drwPlatforms();
 		drwPlayers();
 		break;
-	case STATE_DEAD:
-		// TODO: Let the user know that they died, and perhaps restart it?
+	case STATE_DEAD: {
+		// TODO: menu or at least keys to restart the level or go back
+		// to main menu
+		SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, SDL_ALPHA_OPAQUE);
+		SDL_RenderClear(game.rnd);
+		SDL_SetRenderDrawColor(game.rnd, 0x11, 0x41, 0x61, SDL_ALPHA_OPAQUE);
+		SDL_RenderFillRect(game.rnd, &screenRect);
 
-		/* FALLTHROUGH */
+		if (death_alpha < 255) {
+			drwPlatforms();
+			drwPlayers();
+		}
+
+		SDL_Surface *s = nullDie(SDL_CreateRGBSurface(0, game.w, game.h, 32, 0,
+					0, 0, 0xFF));
+		SDL_SetSurfaceAlphaMod(s, death_alpha);
+		SDL_SetSurfaceBlendMode(s, SDL_BLENDMODE_BLEND);
+
+		drwText(s, "You died", game.w / 2 - 20, game.h / 2 - 20, 30);
+
+		SDL_Texture *t = nullDie(SDL_CreateTextureFromSurface(game.rnd, s));
+
+		SDL_FreeSurface(s);
+		SDL_RenderCopy(game.rnd, t, NULL, NULL);
+
+		SDL_DestroyTexture(t);
+
+		if (death_alpha < 255)
+			death_alpha += 2;
+
+		if (death_alpha > 255)
+			death_alpha = 255;
+
+		break;
+	}
 	case STATE_PAUSE:
 		SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, SDL_ALPHA_OPAQUE);
 		SDL_RenderClear(game.rnd);
@@ -625,16 +793,16 @@ drw(void)
 		drwPlatforms();
 		drwPlayers();
 
-		// TODO: Possibly have a pause menu?
+		// TODO: a pause menu
 		SDL_Rect r = {
-			.x = game.w / 2 - BOX_SIZE,
-			.y = game.h / 2 - 2 * BOX_SIZE,
-			.w = BOX_SIZE,
-			.h = BOX_SIZE*4,
+			.x = game.w / 2 - BLOCK_SIZE,
+			.y = game.h / 2 - 2 * BLOCK_SIZE,
+			.w = BLOCK_SIZE,
+			.h = BLOCK_SIZE*4,
 		};
 		SDL_SetRenderDrawColor(game.rnd, 0x11, 0x11, 0x11, SDL_ALPHA_OPAQUE);
 		SDL_RenderFillRect(game.rnd, &r);
-		r.x = game.w / 2 + BOX_SIZE;
+		r.x = game.w / 2 + BLOCK_SIZE;
 		SDL_RenderFillRect(game.rnd, &r);
 		break;
 	}
@@ -644,25 +812,24 @@ drw(void)
 	clock_gettime(CLOCK_MONOTONIC, &game.time[game.curtime]);
 	struct timespec *t1 = &game.time[game.curtime];
 	struct timespec *t2 = &game.time[!game.curtime];
-	int64_t diff = ((t1->tv_sec - t2->tv_sec) * SECOND)
+	int64_t dt = ((t1->tv_sec - t2->tv_sec) * SECOND)
 		+ t1->tv_nsec - t2->tv_nsec;
 
 	game.curtime = !game.curtime;
 
-	game.dt = (double)diff * 1e-6;
+	game.dt = (double)dt * 1e-6; /* convert nanosecond to millisecond */
 
 	if (game.dt < game.fps) {
 		SDL_Delay(game.fps - game.dt);
 	}
 
+	SDL_RenderPresent(game.rnd);
+
 	clock_gettime(CLOCK_MONOTONIC, &game.time[game.curtime]);
 	game.curtime = !game.curtime;
 
-
-	SDL_RenderPresent(game.rnd);
 }
 
-/* This handles keys "slower" than handleKey. */
 void
 menuHandleKey(int sym)
 {
@@ -726,6 +893,22 @@ menuHandleKey(int sym)
 }
 
 void
+handleKeyup(int sym, int player)
+{
+	switch (game.state) {
+	case STATE_DEAD: /* FALLTHROUGH */
+	case STATE_MENU: /* FALLTHROUGH */
+	case STATE_PAUSE:
+		break;
+	case STATE_PLAY:
+		if (sym == KEY_UP) {
+			jump(player, true);
+		}
+		break;
+	}
+}
+
+void
 handleKey(int sym, int player)
 {
 	switch (game.state) {
@@ -736,7 +919,7 @@ handleKey(int sym, int player)
 	case STATE_PLAY:
 		switch (sym) {
 		case KEY_UP:
-			jump(player);
+			jump(player, false);
 			break;
 		case KEY_DOWN:
 			down(player);

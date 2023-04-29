@@ -2,8 +2,7 @@ PREFIX = /usr/local
 MANDIR = $(PREFIX)/share/man/man6
 DATADIR = $(PREFIX)/games
 BINDIR = $(PREFIX)/bin
-RESOURCE_PATH = $(DATADIR)
-LEVELS_DIR=$(DATADIR)/fuyunix/data/levels/
+GAME_DATA_DIR = $(DATADIR)/fuyunix/data/
 
 CC = cc
 
@@ -12,9 +11,9 @@ CFLAGS = -g -Wall -Werror -pedantic -Wextra -std=c99 -Wno-unused-parameter
 VERSION = `git log -1 --format=dev-%h`
 
 CFLAGS += -D_POSIX_C_SOURCE=200809L \
-		  -DRESOURCE_PATH=\"$(RESOURCE_PATH)\" \
-		  -DLEVELS_DIR=\"$(LEVELS_DIR)\" \
+		  -DDATA_DIR=\"$(DATADIR)\" \
 		  -DVERSION=\"$(VERSION)\" \
+		  -DGAME_DATA_DIR=\"$(GAME_DATA_DIR)\" \
 		  `pkg-config --cflags cairo sdl2`
 
 ## Disable cpu specific vector operations which doesn't work on certain

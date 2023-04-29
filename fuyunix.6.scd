@@ -20,7 +20,7 @@ _fuyunix_ [*-v*|*-l*|*-f*]
 
 # ENVIRONMENT VARIABLES
 *XDG_STATE_HOME*
-	Is used for saving game state
+	Is used for saving game state.
 
 *XDG_CONFIG_HOME*
 	Is used for configuration files.

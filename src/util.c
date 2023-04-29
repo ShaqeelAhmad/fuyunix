@@ -68,11 +68,16 @@ readSaveFile(void)
 		if (errno != ENOENT)
 			fprintf(stderr, "Couldn't open savefile `%s`: %s\n",
 					savepath, strerror(errno));
-		fclose(fp);
 		return 1; /* return default level, 1 */
 	}
 
-	fread(&level, sizeof(int), 1, fp);
+	size_t n = fread(&level, sizeof(int), 1, fp);
+	if (n != 1) {
+		fprintf(stderr, "Error: %s: only read %zu expected to read %zu\n",
+				savepath, n, sizeof(int));
+		fclose(fp);
+		return 1; /* return default level, 1 */
+	}
 
 	fclose(fp);
 

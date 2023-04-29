@@ -22,8 +22,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "drw.h"
 #include "keys.h"
+#include "drw.h"
 #include "scfg.h"
 #include "util.h"
 
@@ -39,7 +39,8 @@ static struct {
 	int is_key_allocated;
 } keys;
 
-_Static_assert(KEY_COUNT == 7, "update keyList");
+_Static_assert(KEY_COUNT == 7, "Update keyList");
+
 static char *keysList[] = {
 	[KEY_UP]     = "up",
 	[KEY_DOWN]   = "down",
@@ -49,7 +50,7 @@ static char *keysList[] = {
 	[KEY_QUIT]   = "quit",
 };
 
-static int
+static size_t
 stringToKey(char *s)
 {
 	for (size_t i = 0; i < sizeof(keysList) / sizeof(keysList[0]); i++) {
@@ -77,7 +78,16 @@ static struct Key defaultkey[] = {
 };
 
 void
-menuHandleKeys(int scancode)
+handleKeyups(SDL_Scancode scancode)
+{
+	for (int i = 0; i < keys.keylen; i++) {
+		if (keys.key[i].key == scancode)
+			handleKeyup(keys.key[i].sym, keys.key[i].player);
+	}
+}
+
+void
+menuHandleKeys(SDL_Scancode scancode)
 {
 	switch (scancode) {
 	case SDL_SCANCODE_UP:
@@ -96,10 +106,11 @@ menuHandleKeys(int scancode)
 	case SDL_SCANCODE_SPACE:
 		menuHandleKey(KEY_SELECT);
 		return;
-	}
-	for (int i = 0; i < keys.keylen; i++) {
-		if (keys.key[i].key == (SDL_Scancode)scancode)
-			menuHandleKeys(keys.key[i].sym);
+	default:
+		for (int i = 0; i < keys.keylen; i++) {
+			if (keys.key[i].key == scancode)
+				menuHandleKey(keys.key[i].sym);
+		}
 	}
 }
 
@@ -109,8 +120,9 @@ void
 handleKeys(void)
 {
 	for (int i = 0; i < keys.keylen; i++) {
-		if (keyboardState[keys.key[i].key])
+		if (keyboardState[keys.key[i].key]) {
 			handleKey(keys.key[i].sym, keys.key[i].player);
+		}
 	}
 }
 
@@ -135,7 +147,7 @@ loadConfig(void)
 	if (scfg_load_file(&block, filepath) < 0) {
 		perror(filepath);
 		goto default_config;
-	};
+	}
 
 	for (size_t i = 0; i < block.directives_len; i++) {
 		struct scfg_directive *d = &block.directives[i];
@@ -182,8 +194,6 @@ loadConfig(void)
 				keylist = erealloc(keylist, keylist_len * sizeof(struct Key));
 				keylist[keylist_len-1] = key;
 			}
-		} else if (strcmp(d->name, "sprite-dir") == 0) {
-			// TODO: implement searching for sprites in user given directory
 		}
 	}
 
@@ -205,6 +215,6 @@ default_config:
 void
 listFunc(void)
 {
-	for (int i = 0; i < (int)(sizeof(keysList) / sizeof(keysList[0])); i++)
+	for (size_t i = 0; i < sizeof(keysList) / sizeof(keysList[0]); i++)
 		printf("%s\n", keysList[i]);
 }
