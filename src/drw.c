@@ -51,7 +51,6 @@
 size_t stage_length = MAX_STAGE_LENGTH;
 
 struct Region {
-	char *name;
 	SDL_Texture *t;
 	SDL_Rect rect;
 };
@@ -69,6 +68,7 @@ enum GameState {
 	STATE_PLAY,
 	STATE_PAUSE,
 	STATE_DEAD,
+	STATE_WON,
 };
 
 struct Player {
@@ -122,7 +122,9 @@ struct TileTexture {
 
 static struct TileTexture tileTextures[] = {
 	{.name = "snow"},
+	{.name = "end"},
 };
+static SDL_Texture *endPointTexture = NULL;
 
 void
 initTileTextures(void)
@@ -139,6 +141,9 @@ initTileTextures(void)
 		if (t->tile == NULL) {
 			fprintf(stderr, "can't load tile %s from file %s", t->name, tileFile);
 			continue;
+		}
+		if (strcmp(t->name, "end") == 0) {
+			endPointTexture = t->tile;
 		}
 	}
 }
@@ -512,6 +517,7 @@ gravityCollision(int i)
 		player[i].w,
 		player[i].h
 	};
+
 	for (size_t j = 0; j < level.regions_len; j++) {
 		SDL_FRect r = {
 			.x = (float)level.regions[j].rect.x,
@@ -520,6 +526,10 @@ gravityCollision(int i)
 			.h = (float)level.regions[j].rect.h,
 		};
 		if (SDL_HasIntersectionF(&p, &r)) {
+			if (level.regions[j].t == endPointTexture) {
+				game.state = STATE_WON;
+				return player[i].y;
+			}
 			player[i].dy = 0;
 			if (dy > 0) { /* Player hit a platform while falling */
 				player[i].inAir = false;
@@ -575,6 +585,11 @@ collisionDetection(int i)
 			.h = (float)level.regions[j].rect.h,
 		};
 		if (SDL_HasIntersectionF(&p, &r)) {
+			if (level.regions[j].t == endPointTexture) {
+				game.state = STATE_WON;
+				return player[i].x;
+			}
+
 			if (dx > 0) { /* Player is going right */
 				player[i].dx = 0;
 				return r.x - player[i].w;
@@ -749,6 +764,25 @@ drw(void)
 		drwPlatforms();
 		drwPlayers();
 		break;
+	case STATE_WON: {
+		// TODO: menu or at least keys to restart the level or go back
+		// to main menu
+		SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, SDL_ALPHA_OPAQUE);
+		SDL_RenderClear(game.rnd);
+
+		SDL_Surface *s = nullDie(SDL_CreateRGBSurface(0, game.w, game.h, 32, 0,
+					0, 0, 0xFF));
+
+		drwText(s, "You won", game.w / 2 - 20, game.h / 2 - 20, 30);
+
+		SDL_Texture *t = nullDie(SDL_CreateTextureFromSurface(game.rnd, s));
+
+		SDL_FreeSurface(s);
+		SDL_RenderCopy(game.rnd, t, NULL, NULL);
+
+		SDL_DestroyTexture(t);
+		break;
+	}
 	case STATE_DEAD: {
 		// TODO: menu or at least keys to restart the level or go back
 		// to main menu
@@ -862,6 +896,8 @@ menuHandleKey(int sym)
 			break;
 		};
 		break;
+	case STATE_WON:
+		/* FALLTHROUGH */
 	case STATE_DEAD:
 		/* FALLTHROUGH */
 	case STATE_PAUSE:
@@ -896,6 +932,7 @@ void
 handleKeyup(int sym, int player)
 {
 	switch (game.state) {
+	case STATE_WON:  /* FALLTHROUGH */
 	case STATE_DEAD: /* FALLTHROUGH */
 	case STATE_MENU: /* FALLTHROUGH */
 	case STATE_PAUSE:
@@ -912,6 +949,7 @@ void
 handleKey(int sym, int player)
 {
 	switch (game.state) {
+	case STATE_WON:  /* FALLTHROUGH */
 	case STATE_DEAD: /* FALLTHROUGH */
 	case STATE_MENU: /* FALLTHROUGH */
 	case STATE_PAUSE:
