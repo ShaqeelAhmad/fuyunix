@@ -18,14 +18,15 @@
  */
 
 #include <assert.h>
-#include <cairo.h>
+#include <fontconfig/fontconfig.h>
 #include <limits.h>
 #include <math.h>
 #include <SDL.h>
 #include <SDL_image.h>
+#include <SDL_ttf.h>
 #include <stdbool.h>
-#include <stdio.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <time.h>
 
 #include "util.h"
@@ -88,6 +89,7 @@ struct Player {
 };
 
 struct Game {
+	TTF_Font *font;
 	SDL_Window *win;
 	SDL_Renderer *rnd;
 
@@ -354,6 +356,38 @@ initVariables(void)
 }
 
 void
+initFont()
+{
+	if (TTF_Init() < 0) {
+		fprintf(stderr, "SDL_TTF: TTF_Init: %s\n", TTF_GetError());
+		exit(1);
+	}
+
+	FcConfig *c = FcInitLoadConfigAndFonts();
+	FcPattern *p = FcNameParse("");
+	FcConfigSubstitute(c, p, FcMatchPattern);
+	FcDefaultSubstitute(p);
+
+	FcResult res;
+	FcPattern *font = FcFontMatch(c, p, &res);
+	if (font) {
+		char *file = NULL;
+		if (FcPatternGetString(font, FC_FILE, 0, &file) == FcResultMatch) {
+			game.font = TTF_OpenFont(file, 32);
+			if (game.font == NULL) {
+				fprintf(stderr, "SDL_TTF: TTF_OpenFont for file %s: %s\n",
+						file, TTF_GetError());
+				exit(1);
+			}
+		}
+		FcPatternDestroy(font);
+	}
+
+	FcPatternDestroy(p);
+	FcFini();
+}
+
+void
 init(int winFlags)
 {
 	negativeDie(SDL_Init(SDL_INIT_VIDEO));
@@ -370,6 +404,8 @@ init(int winFlags)
 	loadConfig();
 
 	initVariables();
+
+	initFont();
 }
 
 void
@@ -384,6 +420,8 @@ cleanup(void)
 
 	writeSaveFile(game.level);
 
+	TTF_CloseFont(game.font);
+	TTF_Quit();
 	SDL_DestroyRenderer(game.rnd);
 	SDL_DestroyWindow(game.win);
 
@@ -391,56 +429,82 @@ cleanup(void)
 }
 
 static void
-drwText(SDL_Surface *s, char *text, int x, int y, double size)
+drwText(char *text, int x, int y, int size)
 {
-	cairo_surface_t *cSurface = cairo_image_surface_create_for_data(
-			(unsigned char *)s->pixels, CAIRO_FORMAT_RGB24,
-			s->w, s->h, s->pitch);
+	TTF_SetFontSize(game.font, size);
 
-	cairo_t *cr = cairo_create(cSurface);
+	SDL_Color fg = {
+		.a = 0xFF,
+		.r = 0xFF,
+		.g = 0xFF,
+		.b = 0xFF,
+	};
+	SDL_Surface *s = TTF_RenderUTF8_Solid(game.font, text, fg);
+	if (s == NULL) {
+		fprintf(stderr, "SDL_TTF: TTF_RenderUTF8_Solid: %s\n", TTF_GetError());
+		exit(1);
+	}
+	SDL_Texture *t = nullDie(SDL_CreateTextureFromSurface(game.rnd, s));
 
-	cairo_select_font_face(cr, "normal", CAIRO_FONT_SLANT_NORMAL,
-			CAIRO_FONT_WEIGHT_NORMAL);
-	cairo_set_font_size(cr, size);
-	cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
-	cairo_move_to(cr, (double)x, (double)y);
-	cairo_show_text(cr, text);
+	SDL_Rect dest = {
+		.x = x,
+		.y = y,
+		.w = s->w,
+		.h = s->h,
+	};
+	SDL_RenderCopy(game.rnd, t, NULL, &dest);
 
-	cairo_destroy(cr);
-	cairo_surface_destroy(cSurface);
+	SDL_DestroyTexture(t);
+	SDL_FreeSurface(s);
 }
 
-static SDL_Texture *
-drwHomeMenu(SDL_Surface *s, int gaps, int focus, int size, int width, int height)
+static void
+drwTextScreenCentered(char *text, int size)
 {
-	SDL_FillRect(s, NULL, 0);
+	TTF_SetFontSize(game.font, size);
+
+	int w = 0, h = 0;
+	if (TTF_SizeUTF8(game.font, text, &w, &h) < 0) {
+		fprintf(stderr, "SDL_TTF: TTF_SizeUTF8: %s\n", TTF_GetError());
+		exit(1);
+	}
+	int x = game.w / 2 - w / 2;
+	int y = game.h / 2 - h / 2;
+
+	drwText(text, x, y, size);
+}
+
+static void
+drwHomeMenu(int gaps, int focus, int size, int width, int height)
+{
+	SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, SDL_ALPHA_OPAQUE);
+	SDL_RenderClear(game.rnd);
+
 	SDL_Rect options[3] = {
 		{gaps, gaps + size, width, height},
 		{gaps, gaps + size * 2, width, height},
 		{gaps, gaps + size * 3, width, height},
 	};
 
-	if (SDL_FillRects(s, options, 3,
-				SDL_MapRGB(s->format, 20, 150, 180)) < 0)
+	SDL_SetRenderDrawColor(game.rnd, 20, 150, 180, SDL_ALPHA_OPAQUE);
+	if (SDL_RenderFillRects(game.rnd, options, 3) < 0)
 		fprintf(stderr, "%s\n", SDL_GetError());
 
-	if (SDL_FillRect(s, &options[focus],
-				SDL_MapRGB(s->format, 20, 190, 180)) < 0)
+	SDL_SetRenderDrawColor(game.rnd, 20, 190, 180, SDL_ALPHA_OPAQUE);
+	if (SDL_RenderFillRect(game.rnd, &options[focus]) < 0)
 		fprintf(stderr, "%s\n", SDL_GetError());
 
 	char nplayer[] = {game.numplayers + '1', '\0'};
 
-	double textSize = 32.0;
-	double offset = height / 2;
-	drwText(s, NAME, gaps*2, offset, textSize*2);
+	int textSize = 32;
+	double offset = (double)height / 2.0;
+	drwText(NAME, gaps*2, offset, textSize*2);
 
 	offset += gaps;
-	drwText(s, "Start", gaps * 2, offset + size, textSize);
-	drwText(s, "Choose players", gaps * 2, offset + size * 2, textSize);
-	drwText(s, nplayer, width - gaps * 2, offset + size * 2, textSize);
-	drwText(s, "Exit", gaps*2, offset + size * 3, textSize);
-
-	return SDL_CreateTextureFromSurface(game.rnd, s);;
+	drwText("Start", gaps * 2, offset + size, textSize);
+	drwText("Choose players", gaps * 2, offset + size * 2, textSize);
+	drwText(nplayer, width - gaps * 2, offset + size * 2, textSize);
+	drwText("Exit", gaps*2, offset + size * 3, textSize);
 }
 
 void
@@ -724,10 +788,6 @@ drw(void)
 		if (game.menuFocus < 0) game.menuFocus = 0;
 		if (game.menuFocus > 2) game.menuFocus = 2;
 		game.focusChange = 0;
-		SDL_Surface *s = nullDie(SDL_CreateRGBSurface(0, game.w, game.h, 32, 0,
-					0, 0, 255));
-		SDL_Texture *t = nullDie(drwHomeMenu(s, gaps, game.menuFocus,
-					sectionSize, sectionWidth, sectionHeight));
 
 		if (game.focusSelect) {
 			switch (game.menuFocus) {
@@ -748,9 +808,8 @@ drw(void)
 		}
 		game.focusSelect = 0;
 
-		SDL_RenderCopy(game.rnd, t, NULL, NULL);
-		SDL_DestroyTexture(t);
-		SDL_FreeSurface(s);
+		drwHomeMenu(gaps, game.menuFocus,
+					sectionSize, sectionWidth, sectionHeight);
 		break;
 	case STATE_PLAY:
 		SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, SDL_ALPHA_OPAQUE);
@@ -770,17 +829,7 @@ drw(void)
 		SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, SDL_ALPHA_OPAQUE);
 		SDL_RenderClear(game.rnd);
 
-		SDL_Surface *s = nullDie(SDL_CreateRGBSurface(0, game.w, game.h, 32, 0,
-					0, 0, 0xFF));
-
-		drwText(s, "You won", game.w / 2 - 20, game.h / 2 - 20, 30);
-
-		SDL_Texture *t = nullDie(SDL_CreateTextureFromSurface(game.rnd, s));
-
-		SDL_FreeSurface(s);
-		SDL_RenderCopy(game.rnd, t, NULL, NULL);
-
-		SDL_DestroyTexture(t);
+		drwTextScreenCentered("You won", 40);
 		break;
 	}
 	case STATE_DEAD: {
@@ -788,27 +837,18 @@ drw(void)
 		// to main menu
 		SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, SDL_ALPHA_OPAQUE);
 		SDL_RenderClear(game.rnd);
-		SDL_SetRenderDrawColor(game.rnd, 0x11, 0x41, 0x61, SDL_ALPHA_OPAQUE);
-		SDL_RenderFillRect(game.rnd, &screenRect);
-
 		if (death_alpha < 255) {
+			SDL_SetRenderDrawColor(game.rnd, 0x11, 0x41, 0x61, SDL_ALPHA_OPAQUE);
+			SDL_RenderFillRect(game.rnd, &screenRect);
 			drwPlatforms();
 			drwPlayers();
+
+			SDL_SetRenderDrawBlendMode(game.rnd, SDL_BLENDMODE_BLEND);
+			SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, death_alpha);
+			SDL_RenderFillRect(game.rnd, NULL);
 		}
 
-		SDL_Surface *s = nullDie(SDL_CreateRGBSurface(0, game.w, game.h, 32, 0,
-					0, 0, 0xFF));
-		SDL_SetSurfaceAlphaMod(s, death_alpha);
-		SDL_SetSurfaceBlendMode(s, SDL_BLENDMODE_BLEND);
-
-		drwText(s, "You died", game.w / 2 - 20, game.h / 2 - 20, 30);
-
-		SDL_Texture *t = nullDie(SDL_CreateTextureFromSurface(game.rnd, s));
-
-		SDL_FreeSurface(s);
-		SDL_RenderCopy(game.rnd, t, NULL, NULL);
-
-		SDL_DestroyTexture(t);
+		drwTextScreenCentered("You died", 40);
 
 		if (death_alpha < 255)
 			death_alpha += 2;

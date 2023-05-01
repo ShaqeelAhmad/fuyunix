@@ -6,7 +6,7 @@ GAME_DATA_DIR = $(DATADIR)/fuyunix/data/
 
 CC = cc
 
-CFLAGS = -g -Wall -Werror -pedantic -Wextra -std=c99 -Wno-unused-parameter
+CFLAGS = -g -Wall -pedantic -Wextra -std=c99 -Wno-unused-parameter
 
 VERSION = `git log -1 --format=dev-%h`
 
@@ -14,10 +14,10 @@ CFLAGS += -D_POSIX_C_SOURCE=200809L \
 		  -DDATA_DIR=\"$(DATADIR)\" \
 		  -DVERSION=\"$(VERSION)\" \
 		  -DGAME_DATA_DIR=\"$(GAME_DATA_DIR)\" \
-		  `pkg-config --cflags cairo sdl2`
+		  `pkg-config --cflags sdl2`
 
 ## Disable cpu specific vector operations which doesn't work on certain
 ## compilers.
 CFLAGS += -DSDL_DISABLE_IMMINTRIN_H
 
-LDFLAGS = `pkg-config --libs cairo SDL2_image sdl2` -lm
+LDFLAGS = `pkg-config --libs SDL2_ttf SDL2_image sdl2` -lm
