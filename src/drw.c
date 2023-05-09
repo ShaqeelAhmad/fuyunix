@@ -47,8 +47,10 @@
 #define PLAYER_SIZE BLOCK_SIZE
 #define LOGICAL_WIDTH 800
 #define LOGICAL_HEIGHT 450
-#define MAX_STAGE_LENGTH (LOGICAL_WIDTH * 12)
+#define MAX_STAGE_HEIGHT (LOGICAL_HEIGHT * 4)
+#define MAX_STAGE_LENGTH (LOGICAL_WIDTH * 10)
 
+size_t stage_height = MAX_STAGE_HEIGHT;
 size_t stage_length = MAX_STAGE_LENGTH;
 
 struct Region {
@@ -107,7 +109,8 @@ struct Game {
 	int w;
 
 	double fps;
-	double cam;
+	double cam_x;
+	double cam_y;
 
 	double scale;
 	int numplayers;
@@ -205,7 +208,7 @@ loadPlayerImages(int i)
 			player[i].frame[frame] = IMG_LoadTexture(game.rnd, path);
 
 			if (player[i].frame[frame] == NULL) {
-				fprintf(stderr, "Unable to Load Texture: %s\n",
+				fprintf(stderr, "Unable to load image texture: %s\n",
 						IMG_GetError());
 			}
 		}
@@ -220,13 +223,13 @@ loadPlayerTextures(void)
 		exit(1);
 	}
 
-	game.cam = 0;
+	game.cam_x = 0;
+	game.cam_y = 0;
 	for (int i = 0; i <= game.numplayers; i++) {
 		loadPlayerImages(i);
 
 		player[i].current = &player[i].frame[0];
 
-		// TODO: don't zero it unless necessary
 		player[i].x  = 0;
 		player[i].y  = 0;
 		player[i].dx = 0;
@@ -330,7 +333,8 @@ initVariables(void)
 	game.w = LOGICAL_WIDTH;
 	game.h = LOGICAL_HEIGHT;
 
-	game.cam = 0;
+	game.cam_x = 0;
+	game.cam_y = 0;
 
 	game.curtime = 0;
 	clock_gettime(CLOCK_MONOTONIC, &game.time[0]);
@@ -620,7 +624,7 @@ gravity(int i, double dt)
 	player[i].y = gravityCollision(i);
 	player[i].dy += GRAVITY;
 
-	if (player[i].y > LOGICAL_HEIGHT) {
+	if (player[i].y > stage_height) {
 		game.state = STATE_DEAD;
 	}
 }
@@ -671,6 +675,7 @@ static void
 movePlayers(int64_t dt)
 {
 	double total_x = 0;
+	double total_y = 0;
 
 	/* TODO: Player-Player collision */
 	for (int i = 0; i <= game.numplayers; i++) {
@@ -690,20 +695,27 @@ movePlayers(int64_t dt)
 		player[i].x = collisionDetection(i);
 
 
-		/* TODO: 2 player mode. Don't allow players to go offscreen */
+		/* TODO: 2 player mode. Don't allow players to go too far offscreen. */
 		if (player[i].x + player[i].w >= stage_length || player[i].x <= 0) {
 			player[i].dx = 0;
 		}
 
 		total_x += player[i].x;
+		total_y += player[i].y;
 	}
 
 	double avg_x = total_x / (double)(game.numplayers + 1);
 
 	if (avg_x > LOGICAL_WIDTH / 2 && avg_x < stage_length - LOGICAL_WIDTH / 2) {
-		if (avg_x - game.cam < -0.9 || avg_x - game.cam > 0.9) {
-			game.cam = avg_x - (LOGICAL_WIDTH / 2);
+		if (avg_x - game.cam_x < -0.9 || avg_x - game.cam_x > 0.9) {
+			game.cam_x = avg_x - (LOGICAL_WIDTH / 2);
 		}
+	}
+
+	double avg_y = total_y / (double)(game.numplayers + 1);
+	game.cam_y = avg_y - LOGICAL_HEIGHT / 2;
+	if (game.cam_y > stage_height - LOGICAL_WIDTH) {
+		game.cam_y = stage_height - LOGICAL_WIDTH;
 	}
 }
 
@@ -712,7 +724,8 @@ drwPlayers(void)
 {
 	for (int i = 0; i <= game.numplayers; i++) {
 		SDL_Rect playrect = {
-			player[i].x - game.cam, player[i].y,
+			player[i].x - game.cam_x,
+			player[i].y - game.cam_y,
 			player[i].w, player[i].h,
 		};
 
@@ -735,8 +748,8 @@ drwPlatforms(void)
 {
 	for (size_t i = 0; i < level.regions_len; i++) {
 		SDL_Rect r = {
-			.x = level.regions[i].rect.x - game.cam,
-			.y = level.regions[i].rect.y,
+			.x = level.regions[i].rect.x - game.cam_x,
+			.y = level.regions[i].rect.y - game.cam_y,
 			.w = level.regions[i].rect.w,
 			.h = level.regions[i].rect.h,
 		};

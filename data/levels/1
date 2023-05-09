@@ -1,6 +1,6 @@
-# The maximum stage length is (32 * 12) = 384
-# The maximum y is 18
-# Coordinates start from top left, e.g
+# The maximum stage length is 250
+# The maximum y is 13
+# Coordinates start from top left, like:
 #
 # 0  1  2  3
 #  +--------->  x
@@ -11,6 +11,7 @@
 #  y
 
 # tile x  y   w  h
+snow   0  0   1  1
 snow   0  13  4  2
 snow   1  12  4  2
 snow   2  11  4  2
@@ -18,7 +19,7 @@ snow   3  10  4  2
 snow   4   9  4  2
 snow   5   8  4  2
 snow   10  8  4  2
-snow   18  8  384  2
+snow   18  8  100  2
 
 end 98 7 1 1
 
