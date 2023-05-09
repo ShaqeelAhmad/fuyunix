@@ -374,18 +374,23 @@ initFont()
 
 	FcResult res;
 	FcPattern *font = FcFontMatch(c, p, &res);
-	if (font) {
-		char *file = NULL;
-		if (FcPatternGetString(font, FC_FILE, 0, &file) == FcResultMatch) {
-			game.font = TTF_OpenFont(file, 32);
-			if (game.font == NULL) {
-				fprintf(stderr, "SDL_TTF: TTF_OpenFont for file %s: %s\n",
-						file, TTF_GetError());
-				exit(1);
-			}
-		}
-		FcPatternDestroy(font);
+	if (font == NULL) {
+		fprintf(stderr, "fontconfig: cannot get default font\n");
+		exit(1);
 	}
+
+	char *file = NULL;
+	if (FcPatternGetString(font, FC_FILE, 0, &file) != FcResultMatch) {
+		fprintf(stderr, "fontconfig: cannot get filepath to default font\n");
+		exit(1);
+	}
+	game.font = TTF_OpenFont(file, 32);
+	if (game.font == NULL) {
+		fprintf(stderr, "SDL_TTF: TTF_OpenFont for file %s: %s\n",
+				file, TTF_GetError());
+		exit(1);
+	}
+	FcPatternDestroy(font);
 
 	FcPatternDestroy(p);
 	FcFini();
@@ -502,12 +507,21 @@ drwHomeMenu(int gaps, int focus, int size, int width, int height)
 
 	int textSize = 32;
 	double offset = (double)height / 2.0;
-	drwText(NAME, gaps*2, offset, textSize*2);
+	drwText(NAME, gaps, offset, textSize*2);
 
 	offset += gaps;
-	drwText("Start", gaps * 2, offset + size, textSize);
-	drwText("Choose players", gaps * 2, offset + size * 2, textSize);
-	drwText(nplayer, width - gaps * 2, offset + size * 2, textSize);
+
+	drwText("Start", gaps*2, offset + size, textSize);
+
+	int w = 0;
+	if (TTF_SizeUTF8(game.font, nplayer, &w, NULL) < 0) {
+		fprintf(stderr, "SDL_TTF: TTF_SizeUTF8: %s\n", TTF_GetError());
+		exit(1);
+	}
+
+	drwText("Choose players", gaps*2, offset + size * 2, textSize);
+	drwText(nplayer, width - w, offset + size * 2, textSize);
+
 	drwText("Exit", gaps*2, offset + size * 3, textSize);
 }
 
@@ -791,8 +805,7 @@ drw(void)
 	case STATE_MENU:
 		SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, SDL_ALPHA_OPAQUE);
 		SDL_RenderClear(game.rnd);
-		// TODO: store the surfaces / textures somewhere and only update when
-		// needed
+
 		int gaps = game.h / 100;
 		int sectionSize = game.h / 4;
 		int sectionHeight = sectionSize - gaps * 2;
