@@ -11,7 +11,6 @@ CFLAGS = -g -Wall -pedantic -Wextra -std=c99 -Wno-unused-parameter
 VERSION = `git log -1 --format=dev-%h`
 
 CFLAGS += -D_POSIX_C_SOURCE=200809L \
-		  -DDATA_DIR=\"$(DATADIR)\" \
 		  -DVERSION=\"$(VERSION)\" \
 		  -DGAME_DATA_DIR=\"$(GAME_DATA_DIR)\" \
 		  `pkg-config --cflags sdl2`

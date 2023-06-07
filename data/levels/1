@@ -11,7 +11,6 @@
 #  y
 
 # tile x  y   w  h
-snow   0  0   1  1
 snow   0  13  4  2
 snow   1  12  4  2
 snow   2  11  4  2

@@ -51,6 +51,9 @@ $ make
 
 Modify `config.mk` for configurations.
 
+Note that you could change `GAME_DATA_DIR` in `config.mk` to `./data/` to play
+the game in this directory without installing.
+
 ## Usage
 
 Look at the manpage for options.

@@ -187,7 +187,7 @@ nullDie(void *p)
 static void
 formatPath(char *path, char *resPath, int i, int frame)
 {
-	if (sprintf(path, "%s%d%s%d%s", resPath, i,
+	if (sprintf(path, "%s/%d%s%d%s", resPath, i,
 				"/sprite-", frame, ".png") < 0) {
 		perror("sprintf: ");
 	};
@@ -197,8 +197,8 @@ static void
 loadPlayerImages(int i)
 {
 	char *userDir = getenv("XDG_DATA_HOME");
+	char path[PATH_MAX];
 	for (int frame = 0; frame < FRAME_NUM; frame++) {
-		char path[PATH_MAX];
 		formatPath(path, userDir, i, frame);
 
 		player[i].frame[frame] = IMG_LoadTexture(game.rnd, path);
@@ -360,7 +360,7 @@ initVariables(void)
 }
 
 void
-initFont()
+initFont(void)
 {
 	if (TTF_Init() < 0) {
 		fprintf(stderr, "SDL_TTF: TTF_Init: %s\n", TTF_GetError());
@@ -368,7 +368,7 @@ initFont()
 	}
 
 	FcConfig *c = FcInitLoadConfigAndFonts();
-	FcPattern *p = FcNameParse("");
+	FcPattern *p = FcNameParse((FcChar8*)"");
 	FcConfigSubstitute(c, p, FcMatchPattern);
 	FcDefaultSubstitute(p);
 
@@ -380,7 +380,7 @@ initFont()
 	}
 
 	char *file = NULL;
-	if (FcPatternGetString(font, FC_FILE, 0, &file) != FcResultMatch) {
+	if (FcPatternGetString(font, FC_FILE, 0, (FcChar8 **)&file) != FcResultMatch) {
 		fprintf(stderr, "fontconfig: cannot get filepath to default font\n");
 		exit(1);
 	}
