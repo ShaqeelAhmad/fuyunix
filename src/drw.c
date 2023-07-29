@@ -860,18 +860,35 @@ drawPlayer(int i, double x, double y, double w, double h, double cam_x, double c
 
 	/* Draw a black square in place of texture that failed to load */
 	if (*player[i].current == NULL) {
+		if (playRect.x + playRect.w > x + w) {
+			playRect.w = x + w - playRect.x;
+		}
+		if (playRect.x < x) {
+			playRect.w -= x - playRect.x;
+			playRect.x = playRect.x;
+		}
 		SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, SDL_ALPHA_OPAQUE);
 		SDL_RenderFillRect(game.rnd, &playRect);
 	} else {
-		SDL_Rect src = {
+		SDL_Rect s = {
 			.x = 0,
 			.y = 0,
 			.w = player[i].w,
 			.h = player[i].h,
 		};
+		struct SDL_Rect p = playRect;
+		if (p.x + p.w > x + w) {
+			p.w = x + w - p.x;
+		}
+		if (p.x < x) {
+			p.w -= x - p.x;
+			p.x = x;
+		}
 
-		if (SDL_RenderCopy(game.rnd, *player[i].current, &src,
-					&playRect) < 0) {
+		s.w = s.w * p.w / playRect.w;
+		s.x = p.x - playRect.x;
+
+		if (SDL_RenderCopy(game.rnd, *player[i].current, &s, &p) < 0) {
 			fprintf(stderr, "%s\n", SDL_GetError());
 		}
 	}
