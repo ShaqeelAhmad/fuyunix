@@ -22,4 +22,6 @@ snow   18  8  100  2
 
 end 98 7 1 1
 
+enemy  18  7  1  1
+
 stage_length 100

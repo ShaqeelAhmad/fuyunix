@@ -65,16 +65,16 @@ main(int argc, char *argv[])
 			switch (x) {
 			case 'v':
 				puts(NAME": "VERSION);
-				return EXIT_SUCCESS;
+				return 0;
 			case 'l':
 				listFunc();
-				return EXIT_SUCCESS;
+				return 0;
 			case 'f':
 				flags |= SDL_WINDOW_FULLSCREEN;
 				break;
 			default:
 				fputs("Usage: fuyunix [-v|-l|-f]\n", stderr);
-				return EXIT_FAILURE;
+				return 1;
 			}
 		}
 	}
@@ -85,5 +85,5 @@ main(int argc, char *argv[])
 
 	cleanup();
 
-	return EXIT_SUCCESS;
+	return 0;
 }

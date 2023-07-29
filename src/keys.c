@@ -49,6 +49,7 @@ static char *keysList[] = {
 	[KEY_LEFT]   = "left",
 	[KEY_RIGHT]  = "right",
 	[KEY_PAUSE]  = "pause",
+	[KEY_SHOOT]  = "shoot",
 	[KEY_QUIT]   = "quit",
 };
 
@@ -71,12 +72,13 @@ static struct Key defaultkey[] = {
 	{SDL_SCANCODE_J,        KEY_DOWN,   0},
 	{SDL_SCANCODE_K,        KEY_UP,     0},
 	{SDL_SCANCODE_L,        KEY_RIGHT,  0},
-
+	{SDL_SCANCODE_U,        KEY_SHOOT,  0},
 	/* Player 2 */
 	{SDL_SCANCODE_A,        KEY_LEFT,   1},
 	{SDL_SCANCODE_S,        KEY_DOWN,   1},
 	{SDL_SCANCODE_W,        KEY_UP,     1},
 	{SDL_SCANCODE_D,        KEY_RIGHT,  1},
+	{SDL_SCANCODE_E,        KEY_SHOOT,  1},
 };
 
 void

@@ -2,3 +2,4 @@ config.mk
 fuyunix.6
 src/*.o
 fuyunix
+fuyunix.exe

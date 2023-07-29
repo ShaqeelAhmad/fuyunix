@@ -16,6 +16,7 @@ enum KeySym {
 	KEY_RIGHT,
 	KEY_PAUSE,
 	KEY_QUIT,
+	KEY_SHOOT,
 
 	/* KEY_SELECT key isn't configurable */
 	KEY_SELECT,

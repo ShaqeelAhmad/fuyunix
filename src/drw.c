@@ -35,24 +35,29 @@
 #include "keys.h"
 #include "scfg.h"
 
-#define GRAVITY 3.48f
-#define TERMINAL_VELOCITY (GRAVITY * 2.8)
+#define GRAVITY 98.0f
+#define TERMINAL_VELOCITY (GRAVITY * 1.2)
 #define JUMP_ACCEL 8
-#define SPEED_ACCEL 2.02f
-#define SPEED_MAX 8
-#define FRICTION 0.78f
+#define SPEED_ACCEL 400.0f
+#define SPEED_MAX 800
+#define FRICTION 0.91f
+#define PROJ_DX 380.0f
+#define PROJ_RET 500
+#define PROJ_SIZE 12
 
 #define FRAME_NUM 3
 
 #define BLOCK_SIZE 32
 #define PLAYER_SIZE BLOCK_SIZE
-#define LOGICAL_WIDTH 800
+#define LOGICAL_WIDTH 900
 #define LOGICAL_HEIGHT 450
 #define MAX_STAGE_HEIGHT (LOGICAL_HEIGHT * 4)
 #define MAX_STAGE_LENGTH (LOGICAL_WIDTH * 10)
 
-size_t stage_height = MAX_STAGE_HEIGHT;
-size_t stage_length = MAX_STAGE_LENGTH;
+static size_t stage_height = MAX_STAGE_HEIGHT;
+static size_t stage_length = MAX_STAGE_LENGTH;
+
+static bool split_screen = true;
 
 struct Region {
 	SDL_Texture *t;
@@ -65,7 +70,7 @@ struct Level {
 	size_t regions_len;
 };
 
-struct Level level;
+static struct Level level;
 
 enum GameState {
 	STATE_MENU,
@@ -81,6 +86,16 @@ struct Player {
 
 	double x;
 	double y;
+
+	struct {
+		bool active;
+		bool retToPlayer;
+		double x;
+		double y;
+		double initial_x;
+		double dx;
+		double dy;
+	} proj;
 
 	double dx;
 	double dy;
@@ -102,16 +117,21 @@ struct Game {
 	int focusChange;
 	int menuFocus;
 
-	struct timespec time[2];
-	int curtime;
 	double dt;
 
 	int h;
 	int w;
 
 	double fps;
-	double cam_x;
-	double cam_y;
+
+	struct {
+		double x;
+		double y;
+		double w;
+		double h;
+		double cam_x;
+		double cam_y;
+	} screens[2];
 
 	double scale;
 	int numplayers;
@@ -129,6 +149,7 @@ struct TileTexture {
 static struct TileTexture tileTextures[] = {
 	{.name = "snow"},
 	{.name = "end"},
+	{.name = "enemy"},
 };
 static SDL_Texture *endPointTexture = NULL;
 
@@ -145,7 +166,7 @@ initTileTextures(void)
 		strcat(tileFile, ext);
 		t->tile = IMG_LoadTexture(game.rnd, tileFile);
 		if (t->tile == NULL) {
-			fprintf(stderr, "can't load tile %s from file %s", t->name, tileFile);
+			fprintf(stderr, "can't load tile %s from file %s\n", t->name, tileFile);
 			continue;
 		}
 		if (strcmp(t->name, "end") == 0) {
@@ -224,8 +245,23 @@ loadPlayerTextures(void)
 		exit(1);
 	}
 
-	game.cam_x = 0;
-	game.cam_y = 0;
+	game.screens[0].cam_x = 0;
+	game.screens[0].cam_y = 0;
+	game.screens[0].x = 0;
+	game.screens[0].y = 0;
+	game.screens[0].w = LOGICAL_WIDTH;
+	game.screens[0].h = LOGICAL_HEIGHT;
+	if (game.numplayers == 1) {
+		game.screens[0].w = LOGICAL_WIDTH/2;
+	}
+
+	game.screens[1].cam_x = 0;
+	game.screens[1].cam_y = 0;
+	game.screens[1].x = LOGICAL_WIDTH/2;
+	game.screens[1].y = 0;
+	game.screens[1].w = LOGICAL_WIDTH/2;
+	game.screens[1].h = LOGICAL_HEIGHT;
+
 	for (int i = 0; i <= game.numplayers; i++) {
 		loadPlayerImages(i);
 
@@ -334,13 +370,6 @@ initVariables(void)
 	game.w = LOGICAL_WIDTH;
 	game.h = LOGICAL_HEIGHT;
 
-	game.cam_x = 0;
-	game.cam_y = 0;
-
-	game.curtime = 0;
-	clock_gettime(CLOCK_MONOTONIC, &game.time[0]);
-	game.time[1] = game.time[0];
-
 	game.fps = 1.0 / 60.0;
 
 	int i = SDL_GetWindowDisplayIndex(game.win);
@@ -358,6 +387,18 @@ initVariables(void)
 
 	initTileTextures();
 	loadLevels();
+
+	player[0].proj.x = -1;
+	player[0].proj.y = -1;
+	player[1].proj.y = -1;
+	player[1].proj.y = -1;
+
+	game.screens[0].cam_x = 0;
+	game.screens[0].cam_y = 0;
+	game.screens[0].x = 0;
+	game.screens[0].y = 0;
+	game.screens[0].w = LOGICAL_WIDTH;
+	game.screens[0].h = LOGICAL_HEIGHT;
 }
 
 void
@@ -527,8 +568,6 @@ jump(int i, bool keyReleased)
 	}
 
 	if (jumpHigher) {
-		i = i > game.numplayers ? 0 : i;
-
 		player[i].dy -= JUMP_ACCEL;
 
 		player[i].inAir = true;
@@ -538,8 +577,6 @@ jump(int i, bool keyReleased)
 void
 right(int i)
 {
-	i = i > game.numplayers ? 0 : i;
-
 	if (player[i].x + player[i].w >= stage_length)
 		return;
 
@@ -554,8 +591,6 @@ right(int i)
 void
 left(int i)
 {
-	i = i > game.numplayers ? 0 : i;
-
 	if (player[i].x <= 0)
 		return;
 
@@ -563,6 +598,28 @@ left(int i)
 		player[i].dx -= SPEED_ACCEL;
 
 	player[i].current = &player[i].frame[2];
+}
+
+void
+shoot(int i)
+{
+	if (player[i].proj.active) {
+		return;
+	}
+	player[i].proj.x = player[i].x + player[i].w/2;
+	player[i].proj.y = player[i].y + player[i].h/2;
+	player[i].proj.initial_x = player[i].proj.x;
+	player[i].proj.active = true;
+	player[i].proj.retToPlayer = false;
+	player[i].proj.dy = 0;
+
+	// XXX: this seems really magical if you don't know that frame[2]
+	// contains sprite for looking left.
+	if (player[i].current == &player[i].frame[2]) {
+		player[i].proj.dx = -PROJ_DX;
+	} else {
+		player[i].proj.dx = PROJ_DX;
+	}
 }
 
 static double
@@ -617,7 +674,7 @@ gravity(int i, double dt)
 	}
 
 	player[i].y = gravityCollision(i);
-	player[i].dy += GRAVITY;
+	player[i].dy += GRAVITY * dt;
 
 	if (player[i].y > stage_height) {
 		game.state = STATE_DEAD;
@@ -667,11 +724,57 @@ collisionDetection(int i)
 }
 
 static void
-movePlayers(int64_t dt)
+moveCameras(void)
 {
-	double total_x = 0;
-	double total_y = 0;
+	if (split_screen) {
+		for (int i = 0; i <= game.numplayers; i++) {
+			double *cam_x = &game.screens[i].cam_x;
+			double *cam_y = &game.screens[i].cam_y;
+			double width = game.screens[i].w;
+			double height = game.screens[i].h;
+			double avg_x = player[i].x;
+			if (avg_x > width / 2 && avg_x < stage_length - width / 2) {
+				if (avg_x - *cam_x < -0.9 || avg_x - *cam_x > 0.9) {
+					*cam_x = avg_x - (width / 2);
+				}
+			}
 
+			double avg_y = player[i].y;;
+			*cam_y = avg_y - height / 2;
+			if (*cam_y > stage_height - width) {
+				*cam_y = stage_height - width;
+			}
+		}
+	} else {
+		double *cam_x = &game.screens[0].cam_x;
+		double *cam_y = &game.screens[0].cam_y;
+		double width = game.screens[0].w;
+		double height = game.screens[0].h;
+		double total_x = 0;
+		double total_y = 0;
+		for (int i = 0; i <= game.numplayers; i++) {
+			total_x += player[i].x;
+			total_y += player[i].y;
+		}
+
+		double avg_x = total_x / (double)(game.numplayers + 1);
+		if (avg_x > width / 2 && avg_x < stage_length - width / 2) {
+			if (avg_x - *cam_x < -0.9 || avg_x - *cam_x > 0.9) {
+				*cam_x = avg_x - (width / 2);
+			}
+		}
+
+		double avg_y = total_y / (double)(game.numplayers + 1);
+		*cam_y = avg_y - height / 2;
+		if (*cam_y > stage_height - width) {
+			*cam_y = stage_height - width;
+		}
+	}
+}
+
+static void
+movePlayers(float dt)
+{
 	/* TODO: Player-Player collision */
 	for (int i = 0; i <= game.numplayers; i++) {
 		gravity(i, dt);
@@ -682,58 +785,168 @@ movePlayers(int64_t dt)
 			player[i].dx = 0;
 		}
 
-		if (player[i].dx >= -0.05 && player[i].dx <= 0.05) {
-			player[i].current = &player[i].frame[0];
-		}
-
-		player[i].dx = player[i].dx * FRICTION;// * dt;
+		player[i].dx = player[i].dx * FRICTION * dt;
 		player[i].x = collisionDetection(i);
-
 
 		/* TODO: 2 player mode. Don't allow players to go too far offscreen. */
 		if (player[i].x + player[i].w >= stage_length || player[i].x <= 0) {
 			player[i].dx = 0;
 		}
 
-		total_x += player[i].x;
-		total_y += player[i].y;
-	}
+		if (player[i].proj.active) {
+			if (player[i].proj.retToPlayer) {
+				SDL_FRect pl = {
+					player[i].x,
+					player[i].y,
+					player[i].w,
+					player[i].h
+				};
+				SDL_FRect pr = {
+					player[i].proj.x,
+					player[i].proj.y,
+					PROJ_SIZE,
+					PROJ_SIZE,
+				};
+				if (SDL_HasIntersectionF(&pl, &pr)) {
+					player[i].proj.active = false;
+					player[i].proj.retToPlayer = false;
+				} else {
+					// XXX: maybe move in a curve to the
+					// player instead of a straight line
+					float eps = 4;
+					if (player[i].x - player[i].proj.x > eps) {
+						player[i].proj.dx = PROJ_DX;
+					} else if (player[i].x - player[i].proj.x < -eps) {
+						player[i].proj.dx = -PROJ_DX;
+					} else {
+						player[i].proj.dx = 0;
+					}
+					if (player[i].y - player[i].proj.y > eps) {
+						player[i].proj.dy = PROJ_DX;
+					} else if (player[i].y - player[i].proj.y < -eps) {
+						player[i].proj.dy = -PROJ_DX;
+					} else {
+						player[i].proj.dy = 0;
+					}
+				}
+			} else if (fabs(player[i].proj.x-player[i].proj.initial_x) > PROJ_RET) {
+				player[i].proj.retToPlayer = true;
+			}
 
-	double avg_x = total_x / (double)(game.numplayers + 1);
-
-	if (avg_x > LOGICAL_WIDTH / 2 && avg_x < stage_length - LOGICAL_WIDTH / 2) {
-		if (avg_x - game.cam_x < -0.9 || avg_x - game.cam_x > 0.9) {
-			game.cam_x = avg_x - (LOGICAL_WIDTH / 2);
+			player[i].proj.x += player[i].proj.dx * dt;
+			player[i].proj.y += player[i].proj.dy * dt;
 		}
 	}
 
-	double avg_y = total_y / (double)(game.numplayers + 1);
-	game.cam_y = avg_y - LOGICAL_HEIGHT / 2;
-	if (game.cam_y > stage_height - LOGICAL_WIDTH) {
-		game.cam_y = stage_height - LOGICAL_WIDTH;
+	moveCameras();
+}
+
+static void
+drawPlayer(int i, double x, double y, double w, double h, double cam_x, double cam_y)
+{
+	SDL_Rect playRect = {
+		x + player[i].x - cam_x,
+		y + player[i].y - cam_y,
+		player[i].w,
+		player[i].h,
+	};
+
+	if (playRect.x + playRect.w  < x || playRect.x > x + w) {
+		return;
+	}
+	if (playRect.y + playRect.h  < y || playRect.y > y + h) {
+		return;
+	}
+
+	/* Draw a black square in place of texture that failed to load */
+	if (*player[i].current == NULL) {
+		SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, SDL_ALPHA_OPAQUE);
+		SDL_RenderFillRect(game.rnd, &playRect);
+	} else {
+		SDL_Rect src = {
+			.x = 0,
+			.y = 0,
+			.w = player[i].w,
+			.h = player[i].h,
+		};
+
+		if (SDL_RenderCopy(game.rnd, *player[i].current, &src,
+					&playRect) < 0) {
+			fprintf(stderr, "%s\n", SDL_GetError());
+		}
+	}
+
+	if (player[i].proj.active &&
+			player[i].proj.x - cam_x < w &&
+			player[i].proj.y - cam_y < h &&
+			player[i].proj.x - cam_x >= 0 &&
+			player[i].proj.y - cam_y >= 0) {
+		SDL_Rect projRect = {
+			x + player[i].proj.x - cam_x,
+			y + player[i].proj.y - cam_y,
+			PROJ_SIZE,
+			PROJ_SIZE,
+		};
+		// use SDL_RenderCopyEx for cool spinning animation?
+		SDL_SetRenderDrawColor(game.rnd, 0XC8, 0XD6, 0XFF,
+				SDL_ALPHA_OPAQUE);
+		SDL_RenderFillRect(game.rnd, &projRect);
 	}
 }
 
 static void
 drwPlayers(void)
 {
-	for (int i = 0; i <= game.numplayers; i++) {
-		SDL_Rect playrect = {
-			player[i].x - game.cam_x,
-			player[i].y - game.cam_y,
-			player[i].w, player[i].h,
-		};
-
-		/* Draw a black square in place of texture that failed to load */
-		if (*player[i].current == NULL) {
-			SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, SDL_ALPHA_OPAQUE);
-			SDL_RenderFillRect(game.rnd, &playrect);
-			SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, SDL_ALPHA_OPAQUE);
-		} else {
-			if (SDL_RenderCopy(game.rnd, *player[i].current, NULL,
-						&playrect) < 0) {
-				fprintf(stderr, "%s\n", SDL_GetError());
+	for (int j = 0; j <= game.numplayers; j++) {
+		double cam_y = game.screens[j].cam_y;
+		double cam_x = game.screens[j].cam_x;
+		double x = game.screens[j].x;
+		double y = game.screens[j].y;
+		double w = game.screens[j].w;
+		double h = game.screens[j].h;
+		for (int i = 0; i <= game.numplayers; i++) {
+			if (i == j) {
+				continue;
 			}
+			drawPlayer(i, x, y, w, h, cam_x, cam_y);
+		}
+		drawPlayer(j, x, y, w, h, cam_x, cam_y);
+	}
+}
+
+
+static void
+drawPlatform(SDL_Texture *t, SDL_Rect r, SDL_Rect d)
+{
+	for (int y = r.y; y < r.y + r.h; y += BLOCK_SIZE) {
+		if (y + BLOCK_SIZE < 0 || y > d.h) {
+			continue;
+		}
+		SDL_Rect f = r;
+		f.h = BLOCK_SIZE;
+		if (y + f.h > d.h) {
+			f.h = d.h - y;
+		}
+		f.y = y + d.y;
+		if (f.y < d.y) {
+			f.h -= d.y - f.y;
+			f.y = d.y;
+		}
+		for (int x = r.x; x < r.x + r.w; x += BLOCK_SIZE) {
+			if (x + BLOCK_SIZE < 0 || x > d.w) {
+				continue;
+			}
+			f.w = BLOCK_SIZE;
+			if (x + f.w > d.w) {
+				f.w = d.w - x;
+			}
+			f.x = x + d.x;
+			if (f.x < d.x) {
+				f.w -= d.x - f.x;
+				f.x = d.x;
+			}
+
+			SDL_RenderCopy(game.rnd, t, NULL, &f);
 		}
 	}
 }
@@ -742,34 +955,27 @@ static void
 drwPlatforms(void)
 {
 	for (size_t i = 0; i < level.regions_len; i++) {
-		SDL_Rect r = {
-			.x = level.regions[i].rect.x - game.cam_x,
-			.y = level.regions[i].rect.y - game.cam_y,
-			.w = level.regions[i].rect.w,
-			.h = level.regions[i].rect.h,
-		};
+		for (int j = 0; j <= game.numplayers; j++) {
+			double *cam_y = &game.screens[j].cam_y;
+			double *cam_x = &game.screens[j].cam_x;
+			SDL_Rect r = {
+				.x = level.regions[i].rect.x - *cam_x,
+				.y = level.regions[i].rect.y - *cam_y,
+				.w = level.regions[i].rect.w,
+				.h = level.regions[i].rect.h,
+			};
+			SDL_Rect dst = {
+				.x = game.screens[j].x,
+				.y = game.screens[j].y,
+				.w = game.screens[j].w,
+				.h = game.screens[j].h,
+			};
 
-		if (r.x > LOGICAL_WIDTH) {
-			continue;
-		}
-
-		for (int y = r.y; y < r.y + r.h; y += BLOCK_SIZE) {
-			SDL_Rect f = r;
-			f.y = y;
-			f.h = BLOCK_SIZE;
-
-			if (y + BLOCK_SIZE < 0 || y > LOGICAL_HEIGHT) {
+			if (r.x > game.screens[j].w || r.y > game.screens[j].h) {
 				continue;
 			}
-			for (int x = r.x; x < r.x + r.w; x += BLOCK_SIZE) {
-				if (x + BLOCK_SIZE < 0 || x > LOGICAL_WIDTH) {
-					continue;
-				}
-				f.x = x;
-				f.w = BLOCK_SIZE;
 
-				SDL_RenderCopy(game.rnd, level.regions[i].t, NULL, &f);
-			}
+			drawPlatform(level.regions[i].t, r, dst);
 		}
 	}
 }
@@ -782,11 +988,10 @@ drw(void)
 	static int death_alpha = 0;
 	if (game.state != STATE_DEAD) death_alpha = 0;
 
+	SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, SDL_ALPHA_OPAQUE);
+	SDL_RenderClear(game.rnd);
 	switch (game.state) {
-	case STATE_MENU:
-		SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, SDL_ALPHA_OPAQUE);
-		SDL_RenderClear(game.rnd);
-
+	case STATE_MENU:;
 		int gaps = game.h / 100;
 		int sectionSize = game.h / 4;
 		int sectionHeight = sectionSize - gaps * 2;
@@ -819,8 +1024,6 @@ drw(void)
 					sectionSize, sectionWidth, sectionHeight);
 		break;
 	case STATE_PLAY:
-		SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, SDL_ALPHA_OPAQUE);
-		SDL_RenderClear(game.rnd);
 		/* Change background to color: "#114261" */
 		SDL_SetRenderDrawColor(game.rnd, 0x11, 0x41, 0x61, SDL_ALPHA_OPAQUE);
 		SDL_RenderFillRect(game.rnd, &screenRect);
@@ -829,21 +1032,22 @@ drw(void)
 
 		drwPlatforms();
 		drwPlayers();
+
+		if (game.numplayers > 0 && split_screen) {
+			SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, SDL_ALPHA_OPAQUE);
+			SDL_RenderDrawLine(game.rnd, game.screens[0].w, game.screens[0].h,
+					game.screens[1].x, game.screens[1].y);
+		}
 		break;
 	case STATE_WON: {
 		// TODO: menu or at least keys to restart the level or go back
 		// to main menu
-		SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, SDL_ALPHA_OPAQUE);
-		SDL_RenderClear(game.rnd);
-
 		drwTextScreenCentered("You won", 40);
 		break;
 	}
 	case STATE_DEAD: {
 		// TODO: menu or at least keys to restart the level or go back
 		// to main menu
-		SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, SDL_ALPHA_OPAQUE);
-		SDL_RenderClear(game.rnd);
 		if (death_alpha < 255) {
 			SDL_SetRenderDrawColor(game.rnd, 0x11, 0x41, 0x61, SDL_ALPHA_OPAQUE);
 			SDL_RenderFillRect(game.rnd, &screenRect);
@@ -866,8 +1070,6 @@ drw(void)
 		break;
 	}
 	case STATE_PAUSE:
-		SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, SDL_ALPHA_OPAQUE);
-		SDL_RenderClear(game.rnd);
 		SDL_SetRenderDrawColor(game.rnd, 0x11, 0x41, 0x61, SDL_ALPHA_OPAQUE);
 		SDL_RenderFillRect(game.rnd, &screenRect);
 
@@ -888,27 +1090,18 @@ drw(void)
 		break;
 	}
 
-#define SECOND 1e9
+	static uint32_t ticks = 0;
+	uint32_t new_ticks = SDL_GetTicks();
+	uint32_t dticks = new_ticks - ticks;
+	ticks = new_ticks;
 
-	clock_gettime(CLOCK_MONOTONIC, &game.time[game.curtime]);
-	struct timespec *t1 = &game.time[game.curtime];
-	struct timespec *t2 = &game.time[!game.curtime];
-	int64_t dt = ((t1->tv_sec - t2->tv_sec) * SECOND)
-		+ t1->tv_nsec - t2->tv_nsec;
-
-	game.curtime = !game.curtime;
-
-	game.dt = (double)dt * 1e-6; /* convert nanosecond to millisecond */
+	game.dt = (double)dticks / 1000.0;
 
 	if (game.dt < game.fps) {
 		SDL_Delay(game.fps - game.dt);
 	}
 
 	SDL_RenderPresent(game.rnd);
-
-	clock_gettime(CLOCK_MONOTONIC, &game.time[game.curtime]);
-	game.curtime = !game.curtime;
-
 }
 
 void
@@ -986,6 +1179,7 @@ handleKeyup(int sym, int player)
 		break;
 	case STATE_PLAY:
 		if (sym == KEY_UP) {
+			player = player > game.numplayers ? 0 : player;
 			jump(player, true);
 		}
 		break;
@@ -1002,6 +1196,7 @@ handleKey(int sym, int player)
 	case STATE_PAUSE:
 		break;
 	case STATE_PLAY:
+		player = player > game.numplayers ? 0 : player;
 		switch (sym) {
 		case KEY_UP:
 			jump(player, false);
@@ -1014,6 +1209,9 @@ handleKey(int sym, int player)
 			break;
 		case KEY_RIGHT:
 			right(player);
+			break;
+		case KEY_SHOOT:
+			shoot(player);
 			break;
 		case KEY_PAUSE:
 		case KEY_QUIT:

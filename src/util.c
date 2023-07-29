@@ -43,7 +43,12 @@ getPath(char *fullpath, char *xdg, char *file, int createDir)
 	strcpy(fullpath, dirpath);
 	strcat(fullpath, dir);
 
+#ifdef __MINGW32__
+#include <direct.h>
+	if (createDir && _mkdir(fullpath) < 0 && errno != EEXIST) {
+#else
 	if (createDir && mkdir(fullpath, 0755) < 0 && errno != EEXIST) {
+#endif
 		fprintf(stderr, "Unable to create directory `%s`: %s\n",
 				fullpath, strerror(errno));
 		exit(1);
