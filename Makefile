@@ -28,6 +28,6 @@ uninstall:
 	rm -rf $(DATADIR)/fuyunix
 
 fuyunix: src/*.c
-	$(CC) -o $@ $(CFLAGS) $(LDFLAGS) src/*.c
+	$(CC) src/*.c -o $@ $(CFLAGS) $(LDFLAGS)
 
 .PHONY: clean install uninstall

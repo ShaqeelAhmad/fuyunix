@@ -18,7 +18,6 @@
  */
 
 #include <assert.h>
-#include <fontconfig/fontconfig.h>
 #include <limits.h>
 #include <math.h>
 #include <SDL.h>
@@ -27,6 +26,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <time.h>
 
 #include "util.h"
@@ -367,33 +368,13 @@ initFont(void)
 		exit(1);
 	}
 
-	FcConfig *c = FcInitLoadConfigAndFonts();
-	FcPattern *p = FcNameParse((FcChar8*)"");
-	FcConfigSubstitute(c, p, FcMatchPattern);
-	FcDefaultSubstitute(p);
-
-	FcResult res;
-	FcPattern *font = FcFontMatch(c, p, &res);
-	if (font == NULL) {
-		fprintf(stderr, "fontconfig: cannot get default font\n");
-		exit(1);
-	}
-
-	char *file = NULL;
-	if (FcPatternGetString(font, FC_FILE, 0, (FcChar8 **)&file) != FcResultMatch) {
-		fprintf(stderr, "fontconfig: cannot get filepath to default font\n");
-		exit(1);
-	}
+	char *file = GAME_DATA_DIR"/fonts/FreeSerifBoldItalic.ttf";
 	game.font = TTF_OpenFont(file, 32);
 	if (game.font == NULL) {
 		fprintf(stderr, "SDL_TTF: TTF_OpenFont for file %s: %s\n",
 				file, TTF_GetError());
 		exit(1);
 	}
-	FcPatternDestroy(font);
-
-	FcPatternDestroy(p);
-	FcFini();
 }
 
 void

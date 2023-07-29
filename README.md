@@ -5,10 +5,10 @@
 A small platformer game using SDL2
 
 ## Dependencies
-- c99 C compiler*
-- cairo
+- c11 C compiler*
 - sdl2 >= 2.0.22
 - sdl2_image
+- sdl2_ttf
 - make
 - scdoc (for manpages)
 
@@ -20,16 +20,9 @@ Other compilers might not work.
 I use Linux and can't guarantee that the program will work on other operating
 systems
 
-## Goals
-
-* Small and works on low end / old hardware.
-* Minimal dependencies
-
 ## TODO
 
 * Joystick / gamepad support.
-* Reading levels from a file.
-* Having special textures for stuff
 
 ## Screenshots
 
@@ -64,6 +57,8 @@ Don't pass any arguments to start the game.
 CC0 for the images
 
 [GPLv3 LICENSE](LICENSE) for the source code
+Also GPLv3 for the fonts in [data/fonts](data/fonts) which
+are taken from https://www.gnu.org/software/freefont/
 
 [MIT LICENSE.scfg](src/LICENSE.scfg) for the scfg source code (specifically
 src/scfg.c and src/scfg.h) which is taken from

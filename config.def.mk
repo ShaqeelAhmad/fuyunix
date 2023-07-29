@@ -6,7 +6,7 @@ GAME_DATA_DIR = $(DATADIR)/fuyunix/data/
 
 CC = cc
 
-CFLAGS = -g -Wall -pedantic -Wextra -std=c99 -Wno-unused-parameter
+CFLAGS = -g -Wall -pedantic -Wextra -std=c11 -Wno-unused-parameter
 
 VERSION = `git log -1 --format=dev-%h`
 

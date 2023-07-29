@@ -17,10 +17,12 @@
  *  along with fuyunix.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <assert.h>
 #include <limits.h>
 #include <SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "keys.h"
 #include "drw.h"
@@ -39,7 +41,7 @@ static struct {
 	int is_key_allocated;
 } keys;
 
-_Static_assert(KEY_COUNT == 7, "Update keyList");
+static_assert(KEY_COUNT == 8, "Update keyList");
 
 static char *keysList[] = {
 	[KEY_UP]     = "up",
