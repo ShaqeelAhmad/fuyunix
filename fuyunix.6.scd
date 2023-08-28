@@ -5,18 +5,18 @@ fuyunix(6)
 _fuyunix_ [*-v*|*-l*|*-f*]
 
 # DESCRIPTION
-	fuyunix is a simple platformer game. It has local multiplayer support (which
-	means 2 player support).
+	fuyunix is a simple platformer game. It has local multiplayer support
+	(currently only focused on 2 players support).
 
 # OPTIONS
 *-v*
 	Shows the version.
 
 *-f*
-	Start in fullscreen
+	Start game in fullscreen.
 
 *-l*
-	list possible functions for keys configuration
+	List all functions for keys configuration in config file.
 
 # ENVIRONMENT VARIABLES
 *XDG_STATE_HOME*
@@ -34,7 +34,7 @@ _$XDG_STATE_HOME/fuyunix/save_
 	Game state saved in binary file.
 
 _$XDG_CONFIG_HOME/fuyunix/config_
-	The configuration file
+	The configuration file.
 
 # DEFAULT KEYS
 TODO

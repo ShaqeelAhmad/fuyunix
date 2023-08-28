@@ -20,20 +20,21 @@
 #include <assert.h>
 #include <limits.h>
 #include <math.h>
-#include <SDL.h>
-#include <SDL_image.h>
-#include <SDL_ttf.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 
+#include "platform.h"
+#include "game.h"
 #include "util.h"
 #include "fuyunix.h"
-#include "keys.h"
 #include "scfg.h"
+
+#ifndef GAME_DATA_DIR
+#define GAME_DATA_DIR "./data"
+#endif
 
 #define GRAVITY 98.0f
 #define TERMINAL_VELOCITY (GRAVITY * 1.2)
@@ -60,8 +61,8 @@ static size_t stage_length = MAX_STAGE_LENGTH;
 static bool split_screen = true;
 
 struct Region {
-	SDL_Texture *t;
-	SDL_Rect rect;
+	game_Texture *t;
+	game_Rect rect;
 };
 
 struct Level {
@@ -81,8 +82,8 @@ enum GameState {
 };
 
 struct Player {
-	SDL_Texture *frame[FRAME_NUM];
-	SDL_Texture **current;
+	game_Texture *frame[FRAME_NUM];
+	game_Texture **current;
 
 	double x;
 	double y;
@@ -107,10 +108,6 @@ struct Player {
 };
 
 struct Game {
-	TTF_Font *font;
-	SDL_Window *win;
-	SDL_Renderer *rnd;
-
 	enum GameState state;
 
 	bool focusSelect;
@@ -136,6 +133,8 @@ struct Game {
 	double scale;
 	int numplayers;
 	int level;
+
+	bool running;
 };
 
 static struct Game game;
@@ -143,7 +142,7 @@ static struct Player player[2];
 
 struct TileTexture {
 	char *name;
-	SDL_Texture *tile;
+	game_Texture *tile;
 };
 
 static struct TileTexture tileTextures[] = {
@@ -151,7 +150,7 @@ static struct TileTexture tileTextures[] = {
 	{.name = "end"},
 	{.name = "enemy"},
 };
-static SDL_Texture *endPointTexture = NULL;
+static game_Texture *endPointTexture = NULL;
 
 void
 initTileTextures(void)
@@ -164,7 +163,8 @@ initTileTextures(void)
 		strcpy(tileFile, tileDir);
 		strcat(tileFile, t->name);
 		strcat(tileFile, ext);
-		t->tile = IMG_LoadTexture(game.rnd, tileFile);
+		t->tile = platform_LoadTexture(tileFile);
+		// t->tile = IMG_LoadTexture(game.rnd, tileFile);
 		if (t->tile == NULL) {
 			fprintf(stderr, "can't load tile %s from file %s\n", t->name, tileFile);
 			continue;
@@ -175,7 +175,7 @@ initTileTextures(void)
 	}
 }
 
-SDL_Texture *
+game_Texture *
 getTileTexture(char *s)
 {
 	for (size_t i = 0; i < sizeof(tileTextures) / sizeof(tileTextures[0]); i++) {
@@ -185,25 +185,6 @@ getTileTexture(char *s)
 		}
 	}
 	return NULL;
-}
-
-static void
-negativeDie(int x)
-{
-	if (x < 0) {
-		fprintf(stderr, "%s\n", SDL_GetError());
-		exit(-1);
-	}
-}
-
-static void *
-nullDie(void *p)
-{
-	if (p == NULL) {
-		fprintf(stderr, "%s\n", SDL_GetError());
-		exit(-1);
-	}
-	return p;
 }
 
 static void
@@ -223,15 +204,14 @@ loadPlayerImages(int i)
 	for (int frame = 0; frame < FRAME_NUM; frame++) {
 		formatPath(path, userDir, i, frame);
 
-		player[i].frame[frame] = IMG_LoadTexture(game.rnd, path);
+		player[i].frame[frame] = platform_LoadTexture(path);
 
 		if (player[i].frame[frame] == NULL) {
 			formatPath(path, GAME_DATA_DIR, i, frame);
-			player[i].frame[frame] = IMG_LoadTexture(game.rnd, path);
+			player[i].frame[frame] = platform_LoadTexture(path);
 
 			if (player[i].frame[frame] == NULL) {
-				fprintf(stderr, "Unable to load image texture: %s\n",
-						IMG_GetError());
+				fprintf(stderr, "Unable to load image texture: %s\n", path);
 			}
 		}
 	}
@@ -240,11 +220,6 @@ loadPlayerImages(int i)
 static void
 loadPlayerTextures(void)
 {
-	if (IMG_Init(IMG_INIT_PNG) != IMG_INIT_PNG) {
-		fprintf(stderr, "IMG_Init: %s\n", IMG_GetError());
-		exit(1);
-	}
-
 	game.screens[0].cam_x = 0;
 	game.screens[0].cam_y = 0;
 	game.screens[0].x = 0;
@@ -275,8 +250,6 @@ loadPlayerTextures(void)
 		player[i].w = PLAYER_SIZE;
 		player[i].h = PLAYER_SIZE;
 	}
-
-	IMG_Quit();
 }
 
 static void
@@ -284,7 +257,7 @@ freePlayerTextures(void)
 {
 	for (int i = 0; i <= game.numplayers; i++)
 		for (int frame = 0; frame < FRAME_NUM; frame++)
-			SDL_DestroyTexture(player[i].frame[frame]);
+			platform_DestroyTexture(player[i].frame[frame]);
 }
 
 static void
@@ -326,7 +299,7 @@ loadLevels(void)
 			continue;
 		};
 
-		SDL_Texture *t = getTileTexture(block.directives[i].name);
+		game_Texture *t = getTileTexture(block.directives[i].name);
 		if (t == NULL) {
 			fprintf(stderr, "%s:%d: unknown tile %s\n", levelPath,
 					block.directives[i].lineno,
@@ -342,7 +315,7 @@ loadLevels(void)
 
 		level.regions[level.regions_len] = (struct Region){
 			.t = t,
-			.rect = (SDL_Rect){
+			.rect = (game_Rect){
 				coords[0],
 				coords[1],
 				coords[2],
@@ -359,31 +332,19 @@ loadLevels(void)
 	scfg_block_finish(&block);
 }
 
-static void
-initVariables(void)
+void
+game_Init(void)
 {
 	game.state = STATE_MENU;
 	game.level = readSaveFile();
 
 	game.numplayers = 0;
+	game.running = true;
 
 	game.w = LOGICAL_WIDTH;
 	game.h = LOGICAL_HEIGHT;
 
-	game.fps = 1.0 / 60.0;
-
-	int i = SDL_GetWindowDisplayIndex(game.win);
-	if (i < 0) {
-		fprintf(stderr, "Unable to get display index: %s\n", SDL_GetError());
-		return;
-	}
-
-	SDL_DisplayMode dm;
-	if (SDL_GetCurrentDisplayMode(i, &dm) < 0) {
-		fprintf(stderr, "Unable to get display mode: %s\n", SDL_GetError());
-		return;
-	}
-	game.fps = 1.0 / (double)dm.refresh_rate;
+	game.fps = platform_GetFPS();
 
 	initTileTextures();
 	loadLevels();
@@ -402,103 +363,33 @@ initVariables(void)
 }
 
 void
-initFont(void)
+game_Quit(void)
 {
-	if (TTF_Init() < 0) {
-		fprintf(stderr, "SDL_TTF: TTF_Init: %s\n", TTF_GetError());
-		exit(1);
-	}
-
-	char *file = GAME_DATA_DIR"/fonts/FreeSerifBoldItalic.ttf";
-	game.font = TTF_OpenFont(file, 32);
-	if (game.font == NULL) {
-		fprintf(stderr, "SDL_TTF: TTF_OpenFont for file %s: %s\n",
-				file, TTF_GetError());
-		exit(1);
-	}
-}
-
-void
-init(int winFlags)
-{
-	negativeDie(SDL_Init(SDL_INIT_VIDEO));
-
-	game.win = nullDie(SDL_CreateWindow(NAME, SDL_WINDOWPOS_UNDEFINED,
-				SDL_WINDOWPOS_UNDEFINED, LOGICAL_WIDTH, LOGICAL_HEIGHT,
-				winFlags));
-
-	game.rnd = nullDie(SDL_CreateRenderer(game.win, -1,
-				SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC));
-
-	SDL_RenderSetLogicalSize(game.rnd, LOGICAL_WIDTH, LOGICAL_HEIGHT);
-
-	loadConfig();
-
-	initVariables();
-
-	initFont();
-}
-
-void
-cleanup(void)
-{
-	freeKeys();
-
 	freePlayerTextures();
 
 	free(level.regions);
 	level.regions_len = 0;
 
 	writeSaveFile(game.level);
-
-	TTF_CloseFont(game.font);
-	TTF_Quit();
-	SDL_DestroyRenderer(game.rnd);
-	SDL_DestroyWindow(game.win);
-
-	SDL_Quit();
 }
 
 static void
 drwText(char *text, int x, int y, int size)
 {
-	TTF_SetFontSize(game.font, size);
-
-	SDL_Color fg = {
+	game_Color fg = {
 		.a = 0xFF,
 		.r = 0xFF,
 		.g = 0xFF,
 		.b = 0xFF,
 	};
-	SDL_Surface *s = TTF_RenderUTF8_Solid(game.font, text, fg);
-	if (s == NULL) {
-		fprintf(stderr, "SDL_TTF: TTF_RenderUTF8_Solid: %s\n", TTF_GetError());
-		exit(1);
-	}
-	SDL_Texture *t = nullDie(SDL_CreateTextureFromSurface(game.rnd, s));
-
-	SDL_Rect dest = {
-		.x = x,
-		.y = y,
-		.w = s->w,
-		.h = s->h,
-	};
-	SDL_RenderCopy(game.rnd, t, NULL, &dest);
-
-	SDL_DestroyTexture(t);
-	SDL_FreeSurface(s);
+	platform_RenderText(text, size, fg, x, y);
 }
 
 static void
 drwTextScreenCentered(char *text, int size)
 {
-	TTF_SetFontSize(game.font, size);
-
 	int w = 0, h = 0;
-	if (TTF_SizeUTF8(game.font, text, &w, &h) < 0) {
-		fprintf(stderr, "SDL_TTF: TTF_SizeUTF8: %s\n", TTF_GetError());
-		exit(1);
-	}
+	platform_MeasureText(text, &w, &h);
 	int x = game.w / 2 - w / 2;
 	int y = game.h / 2 - h / 2;
 
@@ -508,22 +399,14 @@ drwTextScreenCentered(char *text, int size)
 static void
 drwHomeMenu(int gaps, int focus, int size, int width, int height)
 {
-	SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, SDL_ALPHA_OPAQUE);
-	SDL_RenderClear(game.rnd);
-
-	SDL_Rect options[3] = {
+	game_Rect options[3] = {
 		{gaps, gaps + size, width, height},
 		{gaps, gaps + size * 2, width, height},
 		{gaps, gaps + size * 3, width, height},
 	};
 
-	SDL_SetRenderDrawColor(game.rnd, 20, 150, 180, SDL_ALPHA_OPAQUE);
-	if (SDL_RenderFillRects(game.rnd, options, 3) < 0)
-		fprintf(stderr, "%s\n", SDL_GetError());
-
-	SDL_SetRenderDrawColor(game.rnd, 20, 190, 180, SDL_ALPHA_OPAQUE);
-	if (SDL_RenderFillRect(game.rnd, &options[focus]) < 0)
-		fprintf(stderr, "%s\n", SDL_GetError());
+	platform_FillRects(GAME_RGB(20, 150, 180), options, 3);
+	platform_FillRect(GAME_RGB(20, 190, 180), &options[focus]);
 
 	char nplayer[] = {game.numplayers + '1', '\0'};
 
@@ -536,10 +419,7 @@ drwHomeMenu(int gaps, int focus, int size, int width, int height)
 	drwText("Start", gaps*2, offset + size, textSize);
 
 	int w = 0;
-	if (TTF_SizeUTF8(game.font, nplayer, &w, NULL) < 0) {
-		fprintf(stderr, "SDL_TTF: TTF_SizeUTF8: %s\n", TTF_GetError());
-		exit(1);
-	}
+	platform_MeasureText(nplayer, &w, NULL);
 
 	drwText("Choose players", gaps*2, offset + size * 2, textSize);
 	drwText(nplayer, width - w, offset + size * 2, textSize);
@@ -548,7 +428,7 @@ drwHomeMenu(int gaps, int focus, int size, int width, int height)
 }
 
 void
-down(int i)
+down(int i, bool keyReleased)
 {
 	/* Do nothing for now */
 }
@@ -569,16 +449,34 @@ jump(int i, bool keyReleased)
 
 	if (jumpHigher) {
 		player[i].dy -= JUMP_ACCEL;
-
 		player[i].inAir = true;
 	}
 }
 
 void
-right(int i)
+right(int i, bool keyReleased)
 {
+
 	if (player[i].x + player[i].w >= stage_length)
 		return;
+
+#if 0
+	static uint32_t released = 0;
+	if (keyReleased) {
+		released = SDL_GetTicks();
+		return;
+	}
+
+	if (released > 0) {
+		uint32_t r = SDL_GetTicks();
+		if (r - released < 200) {
+			player[i].dx = SPEED_MAX * 2;
+			player[i].current = &player[i].frame[1];
+			return;
+		}
+		released = 0;
+	}
+#endif
 
 	if (player[i].dx < SPEED_MAX)
 		player[i].dx += SPEED_ACCEL;
@@ -589,12 +487,32 @@ right(int i)
 }
 
 void
-left(int i)
+left(int i, bool keyReleased)
 {
 	if (player[i].x <= 0)
 		return;
 
-	if (player[i].dx > -SPEED_MAX)
+#if 0
+	static uint32_t released = 0;
+	if (keyReleased) {
+		released = SDL_GetTicks();
+		return;
+	}
+
+	if (released > 0) {
+		uint32_t r = SDL_GetTicks();
+		if (r - released < 200) {
+			player[i].dx = -SPEED_MAX * 2;
+			player[i].current = &player[i].frame[2];
+			return;
+		}
+		released = 0;
+	}
+#endif
+
+	if (player[i].dx < -SPEED_MAX)
+		player[i].dx = -SPEED_MAX;
+	else
 		player[i].dx -= SPEED_ACCEL;
 
 	player[i].current = &player[i].frame[2];
@@ -623,7 +541,7 @@ shoot(int i)
 }
 
 static double
-gravityCollision(int i)
+playerVerticalCollision(int i)
 {
 	double dy = player[i].dy;
 
@@ -631,34 +549,57 @@ gravityCollision(int i)
 	if (dy == 0)
 		return player[i].y;
 
-	SDL_FRect p = {
-		player[i].x,
-		player[i].y + dy,
-		player[i].w,
-		player[i].h
+	game_FRect p = {
+		(float)player[i].x,
+		(float)player[i].y,
+		(float)player[i].w,
+		(float)player[i].h + dy,
 	};
 
+	struct Region *reg = NULL;
 	for (size_t j = 0; j < level.regions_len; j++) {
-		SDL_FRect r = {
+		//if (level.regions[j].rect.x + level.regions[j].rect.w < p.x)
+		//	continue;
+		//if (p.x + p.w < level.regions[j].rect.x)
+		//	continue;
+
+		game_FRect r = {
 			.x = (float)level.regions[j].rect.x,
 			.y = (float)level.regions[j].rect.y,
 			.w = (float)level.regions[j].rect.w,
 			.h = (float)level.regions[j].rect.h,
 		};
-		if (SDL_HasIntersectionF(&p, &r)) {
-			if (level.regions[j].t == endPointTexture) {
-				game.state = STATE_WON;
-				return player[i].y;
-			}
-			player[i].dy = 0;
-			if (dy > 0) { /* Player hit a platform while falling */
-				player[i].inAir = false;
-				return r.y - player[i].h;
-			} else if (dy < 0) { /* Player bonked while jumping */
-				return r.y + r.h;
+		// TODO: this code will allow for clipping, we should go
+		// through all the regions and choose the one in between the
+		// initial and final postition of player and choose the
+		// platform that's closest to the initial position of player.
+		if (game_HasIntersectionF(p, r)) {
+			if (reg != NULL) {
+				//if reg->rect.y is farther from p.y than r.y {
+				//	reg = &level.regions[j];
+				//}
+			} else {
+				reg = &level.regions[j];
 			}
 		}
 	}
+
+
+	if (reg != NULL) {
+		if (reg->t == endPointTexture) {
+			game.state = STATE_WON;
+			return player[i].y;
+		}
+		player[i].dy = 0;
+		if (dy > 0) { /* Player hit a platform while falling */
+			player[i].inAir = false;
+			return (float)reg->rect.y - player[i].h;
+		} else if (dy < 0) { /* Player bonked while jumping */
+			return (float)reg->rect.y + (float)reg->rect.h;
+		}
+	}
+
+
 	if (dy > 0) {
 		player[i].inAir = true;
 	}
@@ -667,13 +608,13 @@ gravityCollision(int i)
 }
 
 static void
-gravity(int i, double dt)
+movePlayerVertical(int i, double dt)
 {
 	if (player[i].dy > TERMINAL_VELOCITY) {
 		player[i].dy = TERMINAL_VELOCITY;
 	}
 
-	player[i].y = gravityCollision(i);
+	player[i].y = playerVerticalCollision(i);
 	player[i].dy += GRAVITY * dt;
 
 	if (player[i].y > stage_height) {
@@ -682,7 +623,7 @@ gravity(int i, double dt)
 }
 
 static double
-collisionDetection(int i)
+playerHorizontalCollision(int i)
 {
 	double dx = player[i].dx;
 
@@ -690,21 +631,25 @@ collisionDetection(int i)
 	if (dx == 0)
 		return player[i].x;
 
-	SDL_FRect p = {
-		player[i].x + dx,
-		player[i].y,
-		player[i].w,
-		player[i].h
+	game_FRect p = {
+		(float)player[i].x,
+		(float)player[i].y,
+		(float)player[i].w + dx,
+		(float)player[i].h
 	};
 
 	for (size_t j = 0; j < level.regions_len; j++) {
-		SDL_FRect r = {
+		game_FRect r = {
 			.x = (float)level.regions[j].rect.x,
 			.y = (float)level.regions[j].rect.y,
 			.w = (float)level.regions[j].rect.w,
 			.h = (float)level.regions[j].rect.h,
 		};
-		if (SDL_HasIntersectionF(&p, &r)) {
+		// TODO: this code will allow for clipping, we should go
+		// through all the regions and choose the one in between the
+		// initial and final postition of player and choose the
+		// platform that's closest to the initial position of player.
+		if (game_HasIntersectionF(p, r)) {
 			if (level.regions[j].t == endPointTexture) {
 				game.state = STATE_WON;
 				return player[i].x;
@@ -773,69 +718,80 @@ moveCameras(void)
 }
 
 static void
+movePlayerProjectile(int i, float dt)
+{
+	if (!player[i].proj.active) {
+		return;
+	}
+	if (player[i].proj.retToPlayer) {
+		game_FRect pl = {
+			player[i].x,
+			player[i].y,
+			player[i].w,
+			player[i].h
+		};
+		game_FRect pr = {
+			player[i].proj.x,
+			player[i].proj.y,
+			PROJ_SIZE,
+			PROJ_SIZE,
+		};
+		if (game_HasIntersectionF(pl, pr)) {
+			player[i].proj.active = false;
+			player[i].proj.retToPlayer = false;
+		} else {
+			// XXX: maybe move in a curve to the
+			// player instead of a straight line
+			float eps = 4;
+			if (player[i].x - player[i].proj.x > eps) {
+				player[i].proj.dx = PROJ_DX;
+			} else if (player[i].x - player[i].proj.x < -eps) {
+				player[i].proj.dx = -PROJ_DX;
+			} else {
+				player[i].proj.dx = 0;
+			}
+			if (player[i].y - player[i].proj.y > eps) {
+				player[i].proj.dy = PROJ_DX;
+			} else if (player[i].y - player[i].proj.y < -eps) {
+				player[i].proj.dy = -PROJ_DX;
+			} else {
+				player[i].proj.dy = 0;
+			}
+		}
+	} else if (fabs(player[i].proj.x-player[i].proj.initial_x) > PROJ_RET) {
+		player[i].proj.retToPlayer = true;
+	}
+
+	player[i].proj.x += player[i].proj.dx * dt;
+	player[i].proj.y += player[i].proj.dy * dt;
+
+}
+
+static void
+movePlayerHorizontal(int i, float dt)
+{
+	if ((player[i].x <= 0 && player[i].dx < 0)
+			|| (player[i].x + player[i].w >= stage_length
+				&& player[i].dx > 0)) {
+		player[i].dx = 0;
+	}
+
+	player[i].dx = player[i].dx * FRICTION * dt;
+	player[i].x = playerHorizontalCollision(i);
+
+	if (player[i].x + player[i].w >= stage_length || player[i].x <= 0) {
+		player[i].dx = 0;
+	}
+}
+
+static void
 movePlayers(float dt)
 {
 	/* TODO: Player-Player collision */
 	for (int i = 0; i <= game.numplayers; i++) {
-		gravity(i, dt);
-
-		if ((player[i].x <= 0 && player[i].dx < 0)
-				|| (player[i].x + player[i].w >= stage_length
-					&& player[i].dx > 0)) {
-			player[i].dx = 0;
-		}
-
-		player[i].dx = player[i].dx * FRICTION * dt;
-		player[i].x = collisionDetection(i);
-
-		/* TODO: 2 player mode. Don't allow players to go too far offscreen. */
-		if (player[i].x + player[i].w >= stage_length || player[i].x <= 0) {
-			player[i].dx = 0;
-		}
-
-		if (player[i].proj.active) {
-			if (player[i].proj.retToPlayer) {
-				SDL_FRect pl = {
-					player[i].x,
-					player[i].y,
-					player[i].w,
-					player[i].h
-				};
-				SDL_FRect pr = {
-					player[i].proj.x,
-					player[i].proj.y,
-					PROJ_SIZE,
-					PROJ_SIZE,
-				};
-				if (SDL_HasIntersectionF(&pl, &pr)) {
-					player[i].proj.active = false;
-					player[i].proj.retToPlayer = false;
-				} else {
-					// XXX: maybe move in a curve to the
-					// player instead of a straight line
-					float eps = 4;
-					if (player[i].x - player[i].proj.x > eps) {
-						player[i].proj.dx = PROJ_DX;
-					} else if (player[i].x - player[i].proj.x < -eps) {
-						player[i].proj.dx = -PROJ_DX;
-					} else {
-						player[i].proj.dx = 0;
-					}
-					if (player[i].y - player[i].proj.y > eps) {
-						player[i].proj.dy = PROJ_DX;
-					} else if (player[i].y - player[i].proj.y < -eps) {
-						player[i].proj.dy = -PROJ_DX;
-					} else {
-						player[i].proj.dy = 0;
-					}
-				}
-			} else if (fabs(player[i].proj.x-player[i].proj.initial_x) > PROJ_RET) {
-				player[i].proj.retToPlayer = true;
-			}
-
-			player[i].proj.x += player[i].proj.dx * dt;
-			player[i].proj.y += player[i].proj.dy * dt;
-		}
+		movePlayerVertical(i, dt);
+		movePlayerHorizontal(i, dt);
+		movePlayerProjectile(i, dt);
 	}
 
 	moveCameras();
@@ -844,7 +800,7 @@ movePlayers(float dt)
 static void
 drawPlayer(int i, double x, double y, double w, double h, double cam_x, double cam_y)
 {
-	SDL_Rect playRect = {
+	game_Rect playRect = {
 		x + player[i].x - cam_x,
 		y + player[i].y - cam_y,
 		player[i].w,
@@ -867,16 +823,15 @@ drawPlayer(int i, double x, double y, double w, double h, double cam_x, double c
 			playRect.w -= x - playRect.x;
 			playRect.x = playRect.x;
 		}
-		SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, SDL_ALPHA_OPAQUE);
-		SDL_RenderFillRect(game.rnd, &playRect);
+		platform_FillRect(GAME_RGB(0, 0, 0), &playRect);
 	} else {
-		SDL_Rect s = {
+		game_Rect s = {
 			.x = 0,
 			.y = 0,
 			.w = player[i].w,
 			.h = player[i].h,
 		};
-		struct SDL_Rect p = playRect;
+		game_Rect p = playRect;
 		if (p.x + p.w > x + w) {
 			p.w = x + w - p.x;
 		}
@@ -888,9 +843,7 @@ drawPlayer(int i, double x, double y, double w, double h, double cam_x, double c
 		s.w = s.w * p.w / playRect.w;
 		s.x = p.x - playRect.x;
 
-		if (SDL_RenderCopy(game.rnd, *player[i].current, &s, &p) < 0) {
-			fprintf(stderr, "%s\n", SDL_GetError());
-		}
+		platform_DrawTexture(*player[i].current, &s, &p);
 	}
 
 	if (player[i].proj.active &&
@@ -898,16 +851,15 @@ drawPlayer(int i, double x, double y, double w, double h, double cam_x, double c
 			player[i].proj.y - cam_y < h &&
 			player[i].proj.x - cam_x >= 0 &&
 			player[i].proj.y - cam_y >= 0) {
-		SDL_Rect projRect = {
+		game_Rect projRect = {
 			x + player[i].proj.x - cam_x,
 			y + player[i].proj.y - cam_y,
 			PROJ_SIZE,
 			PROJ_SIZE,
 		};
-		// use SDL_RenderCopyEx for cool spinning animation?
-		SDL_SetRenderDrawColor(game.rnd, 0XC8, 0XD6, 0XFF,
-				SDL_ALPHA_OPAQUE);
-		SDL_RenderFillRect(game.rnd, &projRect);
+
+		// XXX: have a spinning animation?
+		platform_FillRect(GAME_RGB(0XC8, 0XD6, 0XFF), &projRect);
 	}
 }
 
@@ -933,13 +885,13 @@ drwPlayers(void)
 
 
 static void
-drawPlatform(SDL_Texture *t, SDL_Rect r, SDL_Rect d)
+drawPlatform(game_Texture *t, game_Rect r, game_Rect d)
 {
 	for (int y = r.y; y < r.y + r.h; y += BLOCK_SIZE) {
 		if (y + BLOCK_SIZE < 0 || y > d.h) {
 			continue;
 		}
-		SDL_Rect f = r;
+		game_Rect f = r;
 		f.h = BLOCK_SIZE;
 		if (y + f.h > d.h) {
 			f.h = d.h - y;
@@ -963,7 +915,7 @@ drawPlatform(SDL_Texture *t, SDL_Rect r, SDL_Rect d)
 				f.x = d.x;
 			}
 
-			SDL_RenderCopy(game.rnd, t, NULL, &f);
+			platform_DrawTexture(t, NULL, &f);
 		}
 	}
 }
@@ -975,13 +927,13 @@ drwPlatforms(void)
 		for (int j = 0; j <= game.numplayers; j++) {
 			double *cam_y = &game.screens[j].cam_y;
 			double *cam_x = &game.screens[j].cam_x;
-			SDL_Rect r = {
+			game_Rect r = {
 				.x = level.regions[i].rect.x - *cam_x,
 				.y = level.regions[i].rect.y - *cam_y,
 				.w = level.regions[i].rect.w,
 				.h = level.regions[i].rect.h,
 			};
-			SDL_Rect dst = {
+			game_Rect dst = {
 				.x = game.screens[j].x,
 				.y = game.screens[j].y,
 				.w = game.screens[j].w,
@@ -998,15 +950,15 @@ drwPlatforms(void)
 }
 
 void
-drw(void)
+drw(double dt)
 {
-	SDL_Rect screenRect = {0, 0, game.w, game.h};
+	game.dt = dt;
+	game_Rect screenRect = {0, 0, game.w, game.h};
 
 	static int death_alpha = 0;
 	if (game.state != STATE_DEAD) death_alpha = 0;
 
-	SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, SDL_ALPHA_OPAQUE);
-	SDL_RenderClear(game.rnd);
+	platform_Clear(GAME_RGB(0, 0, 0));
 	switch (game.state) {
 	case STATE_MENU:;
 		int gaps = game.h / 100;
@@ -1031,7 +983,7 @@ drw(void)
 					game.numplayers++;
 				break;
 			case 2:
-				quitloop();
+				game.running = false;
 				break;
 			}
 		}
@@ -1042,8 +994,7 @@ drw(void)
 		break;
 	case STATE_PLAY:
 		/* Change background to color: "#114261" */
-		SDL_SetRenderDrawColor(game.rnd, 0x11, 0x41, 0x61, SDL_ALPHA_OPAQUE);
-		SDL_RenderFillRect(game.rnd, &screenRect);
+		platform_FillRect(GAME_RGB(0x11, 0x41, 0x61), &screenRect);
 
 		movePlayers(game.dt);
 
@@ -1051,8 +1002,7 @@ drw(void)
 		drwPlayers();
 
 		if (game.numplayers > 0 && split_screen) {
-			SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, SDL_ALPHA_OPAQUE);
-			SDL_RenderDrawLine(game.rnd, game.screens[0].w, game.screens[0].h,
+			platform_DrawLine(GAME_BLACK, game.screens[0].w, game.screens[0].h,
 					game.screens[1].x, game.screens[1].y);
 		}
 		break;
@@ -1066,14 +1016,11 @@ drw(void)
 		// TODO: menu or at least keys to restart the level or go back
 		// to main menu
 		if (death_alpha < 255) {
-			SDL_SetRenderDrawColor(game.rnd, 0x11, 0x41, 0x61, SDL_ALPHA_OPAQUE);
-			SDL_RenderFillRect(game.rnd, &screenRect);
+			platform_FillRect(GAME_RGB(0x11, 0x41, 0x61), &screenRect);
 			drwPlatforms();
 			drwPlayers();
 
-			SDL_SetRenderDrawBlendMode(game.rnd, SDL_BLENDMODE_BLEND);
-			SDL_SetRenderDrawColor(game.rnd, 0, 0, 0, death_alpha);
-			SDL_RenderFillRect(game.rnd, NULL);
+			platform_FillRect(GAME_RGBA(0, 0, 0, death_alpha), NULL);
 		}
 
 		drwTextScreenCentered("You died", 40);
@@ -1087,38 +1034,23 @@ drw(void)
 		break;
 	}
 	case STATE_PAUSE:
-		SDL_SetRenderDrawColor(game.rnd, 0x11, 0x41, 0x61, SDL_ALPHA_OPAQUE);
-		SDL_RenderFillRect(game.rnd, &screenRect);
+		platform_FillRect(GAME_RGB(0x11, 0x41, 0x61), &screenRect);
 
 		drwPlatforms();
 		drwPlayers();
 
 		// TODO: a pause menu
-		SDL_Rect r = {
+		game_Rect r = {
 			.x = game.w / 2 - BLOCK_SIZE,
 			.y = game.h / 2 - 2 * BLOCK_SIZE,
 			.w = BLOCK_SIZE,
 			.h = BLOCK_SIZE*4,
 		};
-		SDL_SetRenderDrawColor(game.rnd, 0x11, 0x11, 0x11, SDL_ALPHA_OPAQUE);
-		SDL_RenderFillRect(game.rnd, &r);
+		platform_FillRect(GAME_RGB(0x11, 0x11, 0x11), &r);
 		r.x = game.w / 2 + BLOCK_SIZE;
-		SDL_RenderFillRect(game.rnd, &r);
+		platform_FillRect(GAME_RGB(0x11, 0x11, 0x11), &r);
 		break;
 	}
-
-	static uint32_t ticks = 0;
-	uint32_t new_ticks = SDL_GetTicks();
-	uint32_t dticks = new_ticks - ticks;
-	ticks = new_ticks;
-
-	game.dt = (double)dticks / 1000.0;
-
-	if (game.dt < game.fps) {
-		SDL_Delay(game.fps - game.dt);
-	}
-
-	SDL_RenderPresent(game.rnd);
 }
 
 void
@@ -1149,7 +1081,7 @@ menuHandleKey(int sym)
 			game.focusSelect = true;
 			break;
 		case KEY_QUIT:
-			quitloop();
+			game.running = false;
 			break;
 		};
 		break;
@@ -1195,9 +1127,17 @@ handleKeyup(int sym, int player)
 	case STATE_PAUSE:
 		break;
 	case STATE_PLAY:
-		if (sym == KEY_UP) {
-			player = player > game.numplayers ? 0 : player;
+		player = player > game.numplayers ? 0 : player;
+		switch (sym) {
+		case KEY_UP:
 			jump(player, true);
+			break;
+		case KEY_RIGHT:
+			right(player, true);
+			break;
+		case KEY_LEFT:
+			left(player, true);
+			break;
 		}
 		break;
 	}
@@ -1219,13 +1159,13 @@ handleKey(int sym, int player)
 			jump(player, false);
 			break;
 		case KEY_DOWN:
-			down(player);
+			down(player, false);
 			break;
 		case KEY_LEFT:
-			left(player);
+			left(player, false);
 			break;
 		case KEY_RIGHT:
-			right(player);
+			right(player, false);
 			break;
 		case KEY_SHOOT:
 			shoot(player);
@@ -1236,4 +1176,18 @@ handleKey(int sym, int player)
 		};
 		break;
 	};
+}
+
+bool
+game_HasIntersectionF(game_FRect a, game_FRect b)
+{
+	return (a.x < b.x + b.w && a.x + a.w > b.x) &&
+			(a.y < b.y + b.h && a.y + a.h > b.y);
+}
+
+bool
+game_Draw(double dt)
+{
+	drw(dt);
+	return game.running;
 }

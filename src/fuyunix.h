@@ -3,6 +3,8 @@
 
 #define NAME "fuyunix"
 
-void quitloop(void);
+#ifndef VERSION
+#define VERSION "unknown"
+#endif
 
 #endif /* _FUYUNIX_H_ */
