@@ -1,7 +1,7 @@
 #ifndef _GAME_H_
 #define _GAME_H_
 
-enum KeySym {
+typedef enum {
 	KEY_UP,
 	KEY_DOWN,
 	KEY_LEFT,
@@ -14,10 +14,24 @@ enum KeySym {
 	KEY_SELECT,
 
 	KEY_COUNT,
-};
+} KeySym;
+
+typedef enum {
+	KEY_UNKNOWN,
+	KEY_PRESSED,
+	KEY_PRESSED_REPEAT,
+	KEY_RELEASED,
+} KeyState;
+
+typedef enum {
+	CURSOR_ARROW,
+	CURSOR_COUNT,
+} Cursor;
 
 typedef struct {
-	bool isKeyPressed[KEY_COUNT];
+	KeyState keys [2][KEY_COUNT];
+	int ptr_x;
+	int ptr_y;
 } game_Input;
 
 typedef struct {
@@ -38,17 +52,13 @@ typedef struct {
 #define GAME_BLACK (game_Color){0, 0, 0, 0xFF}
 
 void game_Init(void);
-void game_Update(game_Input input);
-bool game_HasIntersectionF(game_FRect a, game_FRect b);
-bool game_Draw(double dt);
+bool game_UpdateAndDraw(double dt, game_Input input, int width, int height);
 void game_Quit(void);
 
 game_Texture *platform_LoadTexture(char *file);
 void platform_DestroyTexture(game_Texture *t);
-double platform_GetFPS(void);
-void platform_LoadConfig(void);
 void platform_RenderText(char *text, int size, game_Color fg, int x, int y);
-void platform_MeasureText(char *text, int *w, int *h);
+void platform_MeasureText(char *text, int size, int *w, int *h);
 void platform_FillRects(game_Color c, game_Rect *rects, int count);
 void platform_FillRect(game_Color c, game_Rect *rect);
 void platform_DrawTexture(game_Texture *t, game_Rect *src, game_Rect *dst);

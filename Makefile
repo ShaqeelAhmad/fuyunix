@@ -1,11 +1,20 @@
 .POSIX:
 include config.mk
 
+WL_PROTOCOLS_DIR = /usr/share/wayland-protocols/
+WL_SCANNER = wayland-scanner
+WL_SRC = xdg-shell-protocol.c xdg-decoration-unstable-protocol.c
+WL_HDR = xdg-shell-client-protocol.h xdg-decoration-unstable-client-protocol.h
+XDG_SHELL = $(WL_PROTOCOLS_DIR)/stable/xdg-shell/xdg-shell.xml
+XDG_DECORATION = $(WL_PROTOCOLS_DIR)/unstable/xdg-decoration/xdg-decoration-unstable-v1.xml
+
+
 all: fuyunix man
 
 clean:
 	rm -f fuyunix.6
 	rm -f fuyunix
+	rm -f $(WL_SRC) $(WL_HDR)
 
 man: fuyunix.6
 
@@ -27,7 +36,23 @@ uninstall:
 	rm -f $(MANDIR)/fuyunix.6
 	rm -rf $(DATADIR)/fuyunix
 
-fuyunix: src/*.c
+sdl:
+
+wayland: $(WL_HDR) $(WL_SRC)
+
+xdg-shell-protocol.c:
+	$(WL_SCANNER) private-code $(XDG_SHELL) $@
+
+xdg-shell-client-protocol.h:
+	$(WL_SCANNER) client-header $(XDG_SHELL) $@
+
+xdg-decoration-unstable-protocol.c:
+	$(WL_SCANNER) private-code $(XDG_DECORATION) $@
+
+xdg-decoration-unstable-client-protocol.h:
+	$(WL_SCANNER) client-header $(XDG_DECORATION) $@
+
+fuyunix: src/*.c $(TARGET)
 	$(CC) unity_$(TARGET).c -o $@ $(CFLAGS) $(LDFLAGS)
 
 .PHONY: clean install uninstall

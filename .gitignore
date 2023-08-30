@@ -3,3 +3,5 @@ fuyunix.6
 src/*.o
 fuyunix
 fuyunix.exe
+*-protocol.h
+*-protocol.c

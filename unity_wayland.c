@@ -1,5 +1,10 @@
-// cc `pkg-config --cflags --libs sdl2 SDL2_image SDL2_ttf`  unity_sdl.c
+#include "xdg-decoration-unstable-client-protocol.h"
+#include "xdg-shell-client-protocol.h"
+#include "xdg-decoration-unstable-protocol.c"
+#include "xdg-shell-protocol.c"
+
 #include "src/game.c"
 #include "src/platform_wayland.c"
 #include "src/scfg.c"
 #include "src/util.c"
+#include "src/shm.c"

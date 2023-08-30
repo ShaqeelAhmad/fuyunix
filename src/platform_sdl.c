@@ -55,30 +55,13 @@ game_Texture *
 platform_LoadTexture(char *file)
 {
 	return (game_Texture*)IMG_LoadTexture(renderer, file);
-};
+}
 
 void
 platform_DestroyTexture(game_Texture *t)
 {
 	SDL_DestroyTexture((SDL_Texture*)t);
-};
-
-double
-platform_GetFPS(void)
-{
-	int i = SDL_GetWindowDisplayIndex(window);
-	if (i < 0) {
-		fprintf(stderr, "Unable to get display index: %s\n", SDL_GetError());
-		return 1.0 / 60.0;
-	}
-
-	SDL_DisplayMode dm;
-	if (SDL_GetCurrentDisplayMode(i, &dm) < 0) {
-		fprintf(stderr, "Unable to get display mode: %s\n", SDL_GetError());
-		return 1.0 / 60.0;
-	}
-	return 1.0 / (double)dm.refresh_rate;
-};
+}
 
 void
 platform_RenderText(char *text, int size, game_Color fg, int x, int y)
@@ -107,11 +90,12 @@ platform_RenderText(char *text, int size, game_Color fg, int x, int y)
 
 	SDL_DestroyTexture(t);
 	SDL_FreeSurface(s);
-};
+}
 
 void
-platform_MeasureText(char *text, int *w, int *h)
+platform_MeasureText(char *text, int size, int *w, int *h)
 {
+	TTF_SetFontSize(font, size);
 	if (TTF_SizeUTF8(font, text, w, h) < 0) {
 		fprintf(stderr, "SDL_TTF: TTF_SizeUTF8: %s\n", TTF_GetError());
 		exit(1);
@@ -196,15 +180,14 @@ platform_Init(int flags)
 {
 	negativeDie(SDL_Init(SDL_INIT_VIDEO));
 
-	window = nullDie(SDL_CreateWindow(NAME,
-				SDL_WINDOWPOS_UNDEFINED,
+	window = nullDie(SDL_CreateWindow(NAME, SDL_WINDOWPOS_UNDEFINED,
 				SDL_WINDOWPOS_UNDEFINED, LOGICAL_WIDTH,
 				LOGICAL_HEIGHT, flags));
 	renderer = nullDie(SDL_CreateRenderer(window, -1,
 				SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC));
 
-	// TODO: pas actual size to game so it can draw it handles the scaling.
-	SDL_RenderSetLogicalSize(renderer, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+	// TODO: pass actual size to game so it can draw it handles the scaling.
+	// SDL_RenderSetLogicalSize(renderer, LOGICAL_WIDTH, LOGICAL_HEIGHT);
 
 	if (TTF_Init() < 0){
 		fprintf(stderr, "SDL_TTF: TTF_Init: %s\n", TTF_GetError());
@@ -240,7 +223,7 @@ platform_Quit(void)
 
 struct Key {
 	SDL_Scancode key;
-	enum KeySym sym;
+	KeySym sym;
 	int player;
 };
 
@@ -262,7 +245,7 @@ static char *keysList[] = {
 	[KEY_QUIT]   = "quit",
 };
 
-static size_t
+static int
 stringToKey(char *s)
 {
 	for (size_t i = 0; i < sizeof(keysList) / sizeof(keysList[0]); i++) {
@@ -291,66 +274,16 @@ static struct Key defaultkey[] = {
 };
 
 void
-handleKeyups(SDL_Scancode scancode)
-{
-	for (int i = 0; i < keys.keylen; i++) {
-		if (keys.key[i].key == scancode)
-			handleKeyup(keys.key[i].sym, keys.key[i].player);
-	}
-}
-
-void
-menuHandleKeys(SDL_Scancode scancode)
-{
-	switch (scancode) {
-	case SDL_SCANCODE_UP:
-		menuHandleKey(KEY_UP);
-		return;
-	case SDL_SCANCODE_DOWN:
-		menuHandleKey(KEY_DOWN);
-		return;
-	case SDL_SCANCODE_Q:
-		menuHandleKey(KEY_QUIT);
-		return;
-	case SDL_SCANCODE_ESCAPE:
-		menuHandleKey(KEY_PAUSE);
-		return;
-	case SDL_SCANCODE_RETURN:
-	case SDL_SCANCODE_SPACE:
-		menuHandleKey(KEY_SELECT);
-		return;
-	default:
-		for (int i = 0; i < keys.keylen; i++) {
-			if (keys.key[i].key == scancode)
-				menuHandleKey(keys.key[i].sym);
-		}
-	}
-}
-
-static const Uint8 *keyboardState = NULL;
-
-void
-handleKeys(void)
-{
-	for (int i = 0; i < keys.keylen; i++) {
-		if (keyboardState[keys.key[i].key]) {
-			handleKey(keys.key[i].sym, keys.key[i].player);
-		}
-	}
-}
-
-void
 freeKeys(void)
 {
 	if (keys.is_key_allocated)
 		free(keys.key);
 }
 
+// XXX: it is possible to share most of this code with the wayland version.
 void
 loadConfig(void)
 {
-	keyboardState = SDL_GetKeyboardState(NULL);
-
 	char filepath[PATH_MAX];
 	struct Key *keylist = NULL;
 	int keylist_len = 0;
@@ -432,24 +365,74 @@ listFunc(void)
 		printf("%s\n", keysList[i]);
 }
 
+int
+gameKey(SDL_Scancode code, int *p)
+{
+	for (int i = 0; i < keys.keylen; i++) {
+		if (keys.key[i].key == code) {
+			*p = keys.key[i].player;
+			return keys.key[i].sym;
+		}
+	}
+	*p = 0;
+	switch (code) {
+	case SDL_SCANCODE_UP:
+		return KEY_UP;
+	case SDL_SCANCODE_DOWN:
+		return KEY_DOWN;
+	case SDL_SCANCODE_LEFT:
+		return KEY_LEFT;
+	case SDL_SCANCODE_RIGHT:
+		return KEY_RIGHT;
+	case SDL_SCANCODE_Q:
+		return KEY_QUIT;
+	case SDL_SCANCODE_ESCAPE:
+		return KEY_PAUSE;
+	case SDL_SCANCODE_RETURN: // fallthrough
+	case SDL_SCANCODE_SPACE:
+		return KEY_SELECT;
+	}
+	return -1;
+}
+
 static void
 run(void)
 {
+	const Uint8 *keyboardState = SDL_GetKeyboardState(NULL);
 	SDL_Event event;
+	uint32_t t = SDL_GetTicks();
 	while (true) {
-		handleKeys();
+		game_Input input = {0};
+		for (int i = 0; i < keys.keylen; i++) {
+			SDL_Scancode code = keys.key[i].key;
+			if (keyboardState[code]) {
+				KeySym key = keys.key[i].sym;
+				int player = keys.key[i].player;
+				input.keys[player][key] = KEY_PRESSED_REPEAT;
+			}
+		}
 
 		while (SDL_PollEvent(&event) != 0) {
 			if (event.type == SDL_QUIT)
 				return;
 
+			int player = 0;
+			int key = gameKey(event.key.keysym.scancode, &player);
+			if (key < 0)
+				continue;
+
 			if (event.type == SDL_KEYDOWN)
-				menuHandleKeys(event.key.keysym.scancode);
+				input.keys[player][key] = KEY_PRESSED;
 			else if (event.type == SDL_KEYUP)
-				handleKeyups(event.key.keysym.scancode);
+				input.keys[player][key] = KEY_RELEASED;
 		}
 
-		if (!game_Draw(1.0/60.0)) {
+		uint32_t nt = SDL_GetTicks();
+		double dt = (double)(nt - t) / 1000.0;
+		t = nt;
+		int width, height;
+		SDL_GetWindowSize(window, &width, &height);
+		if (!game_UpdateAndDraw(dt, input, width, height)) {
 			return;
 		}
 		SDL_RenderPresent(renderer);
@@ -487,7 +470,6 @@ main(int argc, char *argv[])
 
 	game_Init();
 	run();
-
 	game_Quit();
 
 	platform_Quit();

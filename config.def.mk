@@ -24,9 +24,8 @@ LDFLAGS_sdl = `pkg-config --libs SDL2_ttf SDL2_image sdl2` -lm
 ## compilers.
 CFLAGS_sdl += -DSDL_DISABLE_IMMINTRIN_H
 
-
-CFLAGS_wayland = `pkg-config --cflags wayland-client xkbcommon`
-LDFLAGS_wayland = `pkg-config --libs wayland-client xkbcommon` -lm
+CFLAGS_wayland = `pkg-config --cflags wayland-client wayland-cursor xkbcommon cairo`
+LDFLAGS_wayland = `pkg-config --libs  wayland-client wayland-cursor xkbcommon cairo` -lm
 
 CFLAGS += $(CFLAGS_$(TARGET))
 LDFLAGS += $(LDFLAGS_$(TARGET))

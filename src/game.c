@@ -119,8 +119,6 @@ struct Game {
 	int h;
 	int w;
 
-	double fps;
-
 	struct {
 		double x;
 		double y;
@@ -185,6 +183,13 @@ getTileTexture(char *s)
 		}
 	}
 	return NULL;
+}
+
+bool
+game_HasIntersectionF(game_FRect a, game_FRect b)
+{
+	return (a.x < b.x + b.w && a.x + a.w > b.x) &&
+			(a.y < b.y + b.h && a.y + a.h > b.y);
 }
 
 static void
@@ -344,8 +349,6 @@ game_Init(void)
 	game.w = LOGICAL_WIDTH;
 	game.h = LOGICAL_HEIGHT;
 
-	game.fps = platform_GetFPS();
-
 	initTileTextures();
 	loadLevels();
 
@@ -389,7 +392,7 @@ static void
 drwTextScreenCentered(char *text, int size)
 {
 	int w = 0, h = 0;
-	platform_MeasureText(text, &w, &h);
+	platform_MeasureText(text, size, &w, &h);
 	int x = game.w / 2 - w / 2;
 	int y = game.h / 2 - h / 2;
 
@@ -419,7 +422,7 @@ drwHomeMenu(int gaps, int focus, int size, int width, int height)
 	drwText("Start", gaps*2, offset + size, textSize);
 
 	int w = 0;
-	platform_MeasureText(nplayer, &w, NULL);
+	platform_MeasureText(nplayer, size, &w, NULL);
 
 	drwText("Choose players", gaps*2, offset + size * 2, textSize);
 	drwText(nplayer, width - w, offset + size * 2, textSize);
@@ -950,11 +953,8 @@ drwPlatforms(void)
 }
 
 void
-drw(double dt)
+drw(game_Rect screenRect)
 {
-	game.dt = dt;
-	game_Rect screenRect = {0, 0, game.w, game.h};
-
 	static int death_alpha = 0;
 	if (game.state != STATE_DEAD) death_alpha = 0;
 
@@ -1053,8 +1053,8 @@ drw(double dt)
 	}
 }
 
-void
-menuHandleKey(int sym)
+static void
+handleKey(int sym)
 {
 	switch (game.state) {
 	case STATE_PLAY:
@@ -1117,8 +1117,8 @@ menuHandleKey(int sym)
 	};
 }
 
-void
-handleKeyup(int sym, int player)
+static void
+handleKeyRelease(int sym, int player)
 {
 	switch (game.state) {
 	case STATE_WON:  /* FALLTHROUGH */
@@ -1143,8 +1143,8 @@ handleKeyup(int sym, int player)
 	}
 }
 
-void
-handleKey(int sym, int player)
+static void
+handleKeyRepeat(int sym, int player)
 {
 	switch (game.state) {
 	case STATE_WON:  /* FALLTHROUGH */
@@ -1178,16 +1178,56 @@ handleKey(int sym, int player)
 	};
 }
 
-bool
-game_HasIntersectionF(game_FRect a, game_FRect b)
+static void
+game_Draw(double dt, int width, int height)
 {
-	return (a.x < b.x + b.w && a.x + a.w > b.x) &&
-			(a.y < b.y + b.h && a.y + a.h > b.y);
+	game.dt = dt;
+	game_Rect screenRect = {
+		0,
+		0,
+		game.w,
+		game.h,
+	};
+
+	game.scale = 1;
+	if (width > LOGICAL_WIDTH && height > LOGICAL_HEIGHT) {
+		game.scale = 1;
+
+		// TODO
+	}
+
+	drw(screenRect);
+}
+
+static void
+game_Update(game_Input input, double dt, int width, int height)
+{
+	for (int player = 0; player < 2; player++) {
+		for (int i = 0; i < KEY_COUNT; i++) {
+			switch (input.keys[player][i]) {
+			case KEY_UNKNOWN:
+				break;
+			case KEY_PRESSED:
+				handleKey(i);
+				if (game.state == STATE_PLAY) {
+					handleKeyRepeat(i, player);
+				}
+				break;
+			case KEY_PRESSED_REPEAT:
+				handleKeyRepeat(i, player);
+				break;
+			case KEY_RELEASED:
+				handleKeyRelease(i, player);
+				break;
+			}
+		}
+	}
 }
 
 bool
-game_Draw(double dt)
+game_UpdateAndDraw(double dt, game_Input input, int width, int height)
 {
-	drw(dt);
+	game_Update(input, dt, width, height);
+	game_Draw(dt, width, height);
 	return game.running;
 }
