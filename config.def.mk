@@ -17,15 +17,6 @@ CFLAGS += -D_POSIX_C_SOURCE=200809L \
 		  -DVERSION=\"$(VERSION)\" \
 		  -DGAME_DATA_DIR=\"$(GAME_DATA_DIR)\"
 
-CFLAGS_sdl = `pkg-config --cflags SDL2_ttf SDL2_image sdl2`
-LDFLAGS_sdl = `pkg-config --libs SDL2_ttf SDL2_image sdl2` -lm
-
 ## Disable cpu specific vector operations which doesn't work on certain
 ## compilers.
-CFLAGS_sdl += -DSDL_DISABLE_IMMINTRIN_H
-
-CFLAGS_wayland = `pkg-config --cflags wayland-client wayland-cursor xkbcommon cairo`
-LDFLAGS_wayland = `pkg-config --libs  wayland-client wayland-cursor xkbcommon cairo` -lm
-
-CFLAGS += $(CFLAGS_$(TARGET))
-LDFLAGS += $(LDFLAGS_$(TARGET))
+CFLAGS += -DSDL_DISABLE_IMMINTRIN_H
