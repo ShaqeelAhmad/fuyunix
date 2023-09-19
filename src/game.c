@@ -255,9 +255,13 @@ loadPlayerTextures(void)
 static void
 freePlayerTextures(void)
 {
-	for (int i = 0; i <= game.numplayers; i++)
-		for (int frame = 0; frame < FRAME_NUM; frame++)
-			platform_DestroyTexture(player[i].frame[frame]);
+	for (int i = 0; i < MAX_PLAYERS; i++) {
+		for (int frame = 0; frame < FRAME_NUM; frame++) {
+			if (player[i].frame[frame])
+				platform_DestroyTexture(player[i].frame[frame]);
+			player[i].frame[frame] = NULL;
+		}
+	}
 }
 
 static struct Level
@@ -1026,6 +1030,7 @@ drw(void)
 			switch (game.menuFocus) {
 			case 0:
 				game.state = STATE_PLAY;
+				freePlayerTextures();
 				loadPlayerTextures();
 				break;
 			case 1:
