@@ -1,6 +1,8 @@
 #ifndef _GAME_H_
 #define _GAME_H_
 
+#define MAX_PLAYERS 2
+
 #ifndef GAME_DATA_DIR
 #define GAME_DATA_DIR "./data"
 #endif

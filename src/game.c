@@ -100,7 +100,7 @@ struct Game {
 		double h;
 		double cam_x;
 		double cam_y;
-	} screens[2];
+	} screens[MAX_PLAYERS];
 
 	double scale;
 	int numplayers;
@@ -115,7 +115,7 @@ struct Game {
 };
 
 static struct Game game;
-static struct Player player[2];
+static struct Player player[MAX_PLAYERS];
 
 struct TileTexture {
 	char *name;
@@ -208,24 +208,31 @@ loadPlayerImages(int i)
 }
 
 static void
-loadPlayerTextures(void)
+resize_screens(int width, int height)
 {
-	game.screens[0].cam_x = 0;
-	game.screens[0].cam_y = 0;
+	// TODO: account for game.numplayers being a number other than 2.
 	game.screens[0].x = 0;
 	game.screens[0].y = 0;
-	game.screens[0].w = LOGICAL_WIDTH;
-	game.screens[0].h = LOGICAL_HEIGHT;
+	game.screens[0].w = width;
+	game.screens[0].h = height;
 	if (game.numplayers == 1) {
-		game.screens[0].w = LOGICAL_WIDTH/2;
+		game.screens[0].w = width/2;
+	}
+	game.screens[1].x = width/2;
+	game.screens[1].y = 0;
+	game.screens[1].w = width/2;
+	game.screens[1].h = height;
+}
+
+static void
+loadPlayerTextures(void)
+{
+	for (int i = 0; i < game.numplayers; i++) {
+		game.screens[i].cam_x = 0;
+		game.screens[i].cam_y = 0;
 	}
 
-	game.screens[1].cam_x = 0;
-	game.screens[1].cam_y = 0;
-	game.screens[1].x = LOGICAL_WIDTH/2;
-	game.screens[1].y = 0;
-	game.screens[1].w = LOGICAL_WIDTH/2;
-	game.screens[1].h = LOGICAL_HEIGHT;
+	resize_screens(LOGICAL_WIDTH, LOGICAL_HEIGHT);
 
 	for (int i = 0; i <= game.numplayers; i++) {
 		loadPlayerImages(i);
@@ -236,6 +243,9 @@ loadPlayerTextures(void)
 		player[i].y  = 0;
 		player[i].dx = 0;
 		player[i].dy = 0;
+
+		player[i].proj.x = -1;
+		player[i].proj.y = -1;
 
 		player[i].w = PLAYER_SIZE;
 		player[i].h = PLAYER_SIZE;
@@ -383,18 +393,6 @@ game_Init(void)
 		platform_Log("failed to load levels\n");
 		exit(1);
 	}
-
-	player[0].proj.x = -1;
-	player[0].proj.y = -1;
-	player[1].proj.y = -1;
-	player[1].proj.y = -1;
-
-	game.screens[0].cam_x = 0;
-	game.screens[0].cam_y = 0;
-	game.screens[0].x = 0;
-	game.screens[0].y = 0;
-	game.screens[0].w = LOGICAL_WIDTH;
-	game.screens[0].h = LOGICAL_HEIGHT;
 }
 
 void
@@ -1031,7 +1029,7 @@ drw(void)
 				loadPlayerTextures();
 				break;
 			case 1:
-				if (game.numplayers >= 1)
+				if (game.numplayers >= MAX_PLAYERS-1)
 					game.numplayers = 0;
 				else
 					game.numplayers++;
@@ -1244,7 +1242,7 @@ game_Draw(double dt, int width, int height)
 static void
 game_Update(struct game_Input input, double dt, int width, int height)
 {
-	for (int player = 0; player < 2; player++) {
+	for (int player = 0; player < MAX_PLAYERS; player++) {
 		for (int i = 0; i < KEY_COUNT; i++) {
 			switch (input.keys[player][i]) {
 			case KEY_UNKNOWN:
@@ -1269,17 +1267,7 @@ game_Update(struct game_Input input, double dt, int width, int height)
 bool
 game_UpdateAndDraw(double dt, struct game_Input input, int width, int height)
 {
-	game.screens[0].x = 0;
-	game.screens[0].y = 0;
-	game.screens[0].w = width;
-	game.screens[0].h = height;
-	if (game.numplayers == 1) {
-		game.screens[0].w = width/2;
-	}
-	game.screens[1].x = width/2;
-	game.screens[1].y = 0;
-	game.screens[1].w = width/2;
-	game.screens[1].h = height;
+	resize_screens(width, height);
 
 	game_Update(input, dt, width, height);
 	game_Draw(dt, width, height);
