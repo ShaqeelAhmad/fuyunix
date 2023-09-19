@@ -19,6 +19,7 @@
 
 #include <errno.h>
 #include <limits.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -26,54 +27,168 @@
 
 #include "util.h"
 
-char *
-getPath(char *fullpath, char *xdg, char *file, int createDir)
-{
-	char *dirpath;
-	char *dir = "/fuyunix";
-	if ((dirpath = getenv(xdg)) == NULL) {
-		if ((dirpath = getenv("HOME")) == NULL) {
-			perror("Unable to get HOME");
-			exit(1);
-		}
-		/* Assume user wants it in HOME when XDG variables are not set */
-		dir = "/.fuyunix";
-	}
-
-	strcpy(fullpath, dirpath);
-	strcat(fullpath, dir);
-
-#ifdef __MINGW32__
-#include <direct.h>
-	if (createDir && _mkdir(fullpath) < 0 && errno != EEXIST) {
+#ifdef _WIN32
+#	define HOME_DIR_ENV   "USERPROFILE"
+#	define CONFIG_DIR_ENV "AppData"
+#	define SAVE_DIR_ENV   "LocalAppData"
+#	define ALT_CONFIG_DIR "/AppData/Roaming/"
+#	define ALT_SAVE_DIR   "/AppData/Local/"
 #else
-	if (createDir && mkdir(fullpath, 0755) < 0 && errno != EEXIST) {
+#	define HOME_DIR_ENV   "HOME"
+#	define CONFIG_DIR_ENV "XDG_CONFIG_HOME"
+#	define SAVE_DIR_ENV   "XDG_STATE_HOME"
+#	define ALT_CONFIG_DIR "/.config/"
+#	define ALT_SAVE_DIR   "/.local/state/"
 #endif
-		fprintf(stderr, "Unable to create directory `%s`: %s\n",
-				fullpath, strerror(errno));
-		exit(1);
+
+int
+getConfigDir(char *path, size_t path_len)
+{
+	char *dir = getenv(CONFIG_DIR_ENV);
+	size_t dirlen = 0;
+	char  *s =        "/fuyunix/";
+	size_t n = sizeof("/fuyunix/")-1;
+	if (dir) {
+		dirlen = strlen(dir);
+	} else {
+		dir = getenv(HOME_DIR_ENV);
+		if (dir == NULL) {
+#ifdef _WIN32
+			perror("Unable to get %"HOME_DIR_ENV"%");
+#else
+			perror("Unable to get $"HOME_DIR_ENV"");
+#endif
+			return false;
+		}
+		dirlen = strlen(dir);
+
+		s =        ALT_CONFIG_DIR"/fuyunix/";
+		n = sizeof(ALT_CONFIG_DIR"/fuyunix/")-1;
+	}
+	if (dirlen + n >= path_len-1) {
+		return -1;
+	}
+	memcpy(path, dir, dirlen);
+	memcpy(path + dirlen, s, n);
+	path[dirlen+n] = 0;
+	return dirlen+n;
+}
+
+int
+getSaveDir(char *path, size_t path_len)
+{
+	char *dir = getenv(SAVE_DIR_ENV);
+	size_t dirlen = 0;
+	char  *s =        "/fuyunix/";
+	size_t n = sizeof("/fuyunix/")-1;
+	if (dir) {
+		dirlen = strlen(dir);
+	} else {
+		dir = getenv(HOME_DIR_ENV);
+		if (dir == NULL) {
+#ifdef _WIN32
+			perror("Unable to get %"HOME_DIR_ENV"%");
+#else
+			perror("Unable to get $"HOME_DIR_ENV"");
+#endif
+			return false;
+		}
+		dirlen = strlen(dir);
+
+		s =        ALT_SAVE_DIR"/fuyunix/";
+		n = sizeof(ALT_SAVE_DIR"/fuyunix/")-1;
+	}
+	if (dirlen + n >= path_len-1) {
+		return -1;
+	}
+	memcpy(path, dir, dirlen);
+	memcpy(path + dirlen, s, n);
+	path[dirlen+n] = 0;
+	return dirlen+n;
+}
+
+bool
+mkdir_all(char *path)
+{
+	char *s = path;
+
+	while (*s) {
+		while (*s && *s != '/')
+			s++;
+		if (*s)
+			s++;
+		char c = *s;
+		*s = 0;
+#ifdef _WIN32
+		if (mkdir(path) < 0 && errno != EEXIST) {
+#else
+		if (mkdir(path, 0755) < 0 && errno != EEXIST) {
+#endif
+			fprintf(stderr, "failed to make directory %s: %s\n",
+					path, strerror(errno));
+			*s = c;
+			return false;
+		}
+		*s = c;
+		while (*s == '/')
+			s++;
+	}
+	return true;
+}
+
+bool
+getConfigFile(char *path, size_t path_len)
+{
+	int n = getConfigDir(path, path_len);
+	if (n < 0)
+		return false;
+
+	char *s =        "config";
+	int   m = sizeof("config");
+	if ((size_t)(n + m) >= path_len - 1)
+		return false;
+	memcpy(path + n, s, m);
+	path[n + m] = 0;
+	return true;
+}
+
+bool
+getSaveFile(char *path, size_t path_len, bool create_dir)
+{
+	int n = getSaveDir(path, path_len);
+	if (n < 0)
+		return false;
+
+	if (create_dir && !mkdir_all(path)) {
+		return false;
 	}
 
-	strcat(fullpath, file);
-
-	return fullpath;
+	char *s =        "save";
+	int   m = sizeof("save");
+	if ((size_t)(n + m) >= path_len - 1)
+		return false;
+	memcpy(path + n, s, m);
+	path[n + m] = 0;
+	return true;
 }
 
 int
 readSaveFile(void)
 {
-	int level;
+	int level = 0;
 	char savepath[PATH_MAX];
 	FILE *fp;
 
-	getPath(savepath, "XDG_STATE_HOME", "/save", 1);
+	if (!getSaveFile(savepath, sizeof(savepath), false)) {
+		return level;
+	};
 	fp = fopen(savepath, "rb");
 
 	if (fp == NULL) {
 		if (errno != ENOENT)
 			fprintf(stderr, "Couldn't open savefile `%s`: %s\n",
 					savepath, strerror(errno));
-		return 1; /* return default level, 1 */
+		return level;
 	}
 
 	size_t n = fread(&level, sizeof(int), 1, fp);
@@ -81,7 +196,7 @@ readSaveFile(void)
 		fprintf(stderr, "Error: %s: only read %zu expected to read %zu\n",
 				savepath, n, sizeof(int));
 		fclose(fp);
-		return 1; /* return default level, 1 */
+		return level;
 	}
 
 	fclose(fp);
@@ -95,12 +210,15 @@ writeSaveFile(int level)
 	char savepath[PATH_MAX];
 	FILE *fp;
 
-	getPath(savepath, "XDG_STATE_HOME", "/save", 1);
+	if (!getSaveFile(savepath, sizeof(savepath), true)) {
+		fprintf(stderr, "Can't write save file: falied to get path to save file\n");
+		return;
+	}
 
 	fp = fopen(savepath, "wb+");
 
 	if (fp == NULL) {
-		fprintf(stderr, "Couldn't open savefile `%s`: %s\n",
+		fprintf(stderr, "Couldn't open save file `%s`: %s\n",
 				savepath, strerror(errno));
 		fclose(fp);
 		return;

@@ -1,7 +1,7 @@
-// TODO: use the same font as in the sdl version.
 #include <assert.h>
 #include <cairo.h>
 #include <errno.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <sys/mman.h>
 #include <sys/select.h>
@@ -11,14 +11,22 @@
 #include <wayland-client.h>
 #include <wayland-cursor.h>
 #include <xkbcommon/xkbcommon.h>
+#include <ft2build.h>
+#include FT_FREETYPE_H
+#include <freetype/ftmodapi.h>
+#include <cairo-ft.h>
 
+#include "scfg.h"
+#include "util.h"
 #include "game.h"
+#include "fuyunix.h"
+#include <dlfcn.h>
 
 struct {
 	char *name;
 	struct wl_cursor *cursor;
 } cursors[CURSOR_COUNT] = {
-	[CURSOR_ARROW] = {"left_ptr"},
+	[CURSOR_ARROW] = {"left_ptr", NULL},
 };
 
 struct Buffer {
@@ -65,9 +73,13 @@ struct Wayland {
 	int width;
 	int height;
 
-	game_Input game_input;
+	struct game_Input game_input;
 
 	struct Buffer buffer;
+
+	FT_Library ft_lib;
+	FT_Face    ft_face;
+	cairo_font_face_t *font_face;
 
 	bool configured;
 	bool redraw;
@@ -76,7 +88,7 @@ struct Wayland {
 
 struct Wayland wayland;
 
-#define GAME_CAIRO_RGBA(c) (c.r / 255.0), (c.g / 255.0), (c.b / 255.0), (c.a / 255.0)
+#define CAIRO_RGBA(c) (c.r / 255.0), (c.g / 255.0), (c.b / 255.0), (c.a / 255.0)
 
 game_Texture *
 platform_LoadTexture(char *file)
@@ -96,13 +108,36 @@ platform_DestroyTexture(game_Texture *t)
 }
 
 void
-platform_RenderText(char *text, int size, game_Color fg, int x, int y)
+platform_Log(char *fmt, ...)
+{
+	va_list ap;
+	va_start(ap, fmt);
+	vfprintf(stderr, fmt, ap);
+	va_end(ap);
+}
+
+bool
+platform_ReadSaveData(struct game_Data *data)
+{
+	int level = readSaveFile();
+	data->level = level;
+	return true;
+}
+
+void
+platform_WriteSaveData(struct game_Data *data)
+{
+	writeSaveFile(data->level);
+}
+
+void
+platform_RenderText(char *text, int size, struct game_Color fg, int x, int y)
 {
 	cairo_t *cr = wayland.buffer.cr;
 	cairo_save(cr);
 	cairo_set_font_size(cr, (double)size);
 	cairo_move_to(cr, x, y);
-	cairo_set_source_rgba(cr, GAME_CAIRO_RGBA(fg));
+	cairo_set_source_rgba(cr, CAIRO_RGBA(fg));
 	cairo_show_text(cr, text);
 	cairo_restore(cr);
 }
@@ -122,50 +157,63 @@ platform_MeasureText(char *text, int size, int *w, int *h)
 }
 
 void
-platform_FillRect(game_Color c, game_Rect *rect)
+platform_FillRect(struct game_Color c, struct game_Rect *rect)
 {
-	struct Wayland *wl = &wayland;
-	cairo_set_source_rgba(wl->buffer.cr, GAME_CAIRO_RGBA(c));
-	cairo_rectangle(wl->buffer.cr, rect.x, rect.y, rect.w, rect.h);
-	cairo_fill(wl->buffer.cr);
-};
-void
-platform_FillRects(game_Color c, game_Rect *rects, int count)
-{
-	struct Wayland *wl = &wayland;
-	cairo_set_source_rgba(wl->buffer.cr, GAME_CAIRO_RGBA(c));
-	for (int i = 0; i < count; i++) {
-		game_Rect rect = rects[i];
-		cairo_rectangle(wl->buffer.cr, rect.x, rect.y, rect.w, rect.h);
-		cairo_fill(wl->buffer.cr);
+	cairo_t *cr = wayland.buffer.cr;
+	cairo_set_source_rgba(cr, CAIRO_RGBA(c));
+	if (rect == NULL) {
+		cairo_rectangle(cr, 0, 0, wayland.buffer.width, wayland.buffer.height);
+	} else {
+		cairo_rectangle(cr, rect->x, rect->y, rect->w, rect->h);
 	}
-};
-
-void
-platform_DrawTexture(game_Texture *t, game_Rect *src, game_Rect *dst)
-{
-	struct Wayland *wl = &wayland;
-	cairo_set_source_surface(wl->buffer.cr, (cairo_surface_t*)t, dst->x, dst->y);
-	cairo_paint(wl->buffer.cr);
-};
-
-void
-platform_Clear(game_Color c)
-{
-	struct Wayland *wl = &wayland;
-	cairo_set_source_rgba(wl->buffer.cr, GAME_CAIRO_RGBA(c));
-	cairo_paint(wl->buffer.cr);
+	cairo_fill(cr);
 }
 
 void
-platform_DrawLine(game_Color c, int x1, int y1, int x2, int y2)
+platform_DrawTexture(game_Texture *tex, struct game_Rect *src, struct game_Rect *dst)
 {
 	struct Wayland *wl = &wayland;
-	cairo_set_source_rgba(wl->buffer.cr, GAME_CAIRO_RGBA(c));
-	cairo_move_to(wl->buffer.cr, 1, y1);
-	cairo_line_to(wl->buffer.cr, 2, y2);
-	cairo_stroke(wl->buffer.cr);
-};
+	cairo_t *cr = wl->buffer.cr;
+	cairo_save(cr);
+
+	cairo_surface_t *t = (cairo_surface_t *)tex;
+
+	if (src != NULL) {
+		t = cairo_surface_create_for_rectangle(t,
+				src->x, src->y, src->w, src->h);
+	}
+
+	if (dst != NULL) {
+		cairo_set_source_surface(cr, t, dst->x, dst->y);
+	} else {
+		// TODO: render to entire surface
+		cairo_set_source_surface(cr, t, 0, 0);
+	}
+	cairo_paint(cr);
+	if ((cairo_surface_t *)t != (cairo_surface_t *)tex) {
+		cairo_surface_destroy(t);
+	}
+
+	cairo_restore(cr);
+}
+
+void
+platform_Clear(struct game_Color c)
+{
+	cairo_t *cr = wayland.buffer.cr;
+	cairo_set_source_rgba(cr, CAIRO_RGBA(c));
+	cairo_paint(cr);
+}
+
+void
+platform_DrawLine(struct game_Color c, int x1, int y1, int x2, int y2)
+{
+	cairo_t *cr = wayland.buffer.cr;
+	cairo_set_source_rgba(cr, CAIRO_RGBA(c));
+	cairo_move_to(cr, x1, y1);
+	cairo_line_to(cr, x2, y2);
+	cairo_stroke(cr);
+}
 
 struct Key {
 	xkb_keysym_t key;
@@ -226,7 +274,9 @@ loadConfig(void)
 	int keylist_len = 0;
 	struct scfg_block block;
 
-	getPath(filepath, "XDG_CONFIG_HOME", "/config", 0);
+	if (!getConfigFile(filepath, sizeof(filepath))) {
+		goto default_config;
+	}
 	if (scfg_load_file(&block, filepath) < 0) {
 		perror(filepath);
 		goto default_config;
@@ -379,6 +429,8 @@ keyboard_handle_key(void *data, struct wl_keyboard *wl_keyboard, uint32_t
 	key += 8;
 
 	xkb_keysym_t keysym = xkb_state_key_get_one_sym(wl->xkb_state, key);
+	if (keysym == XKB_KEY_NoSymbol)
+		return;
 
 	int player = 0;
 	int k = gameKey(keysym, &player);
@@ -640,6 +692,8 @@ newBuffer(int width, int height, struct wl_shm *shm)
 		exit(1);
 	}
 
+	cairo_set_font_face(buf.cr, wayland.font_face);
+
 	return buf;
 }
 
@@ -650,18 +704,40 @@ freeBuffer(struct Buffer *buf)
 		return;
 	}
 	cairo_surface_finish(buf->surf);
+	cairo_surface_destroy(buf->surf);
 	cairo_destroy(buf->cr);
+
+	munmap(buf->data, buf->data_sz);
 
 	wl_buffer_destroy(buf->wl_buf);
 	close(buf->fd);
 
-	buf->data = NULL;
 	buf->surf = NULL;
 	buf->cr = NULL;
 	buf->wl_buf = NULL;
 	buf->fd = -1;
 	buf->data = NULL;
 	buf->data_sz = 0;
+}
+
+void
+platform_InitFont(struct Wayland *wl)
+{
+	FT_Error err = FT_Init_FreeType(&wl->ft_lib);
+	if (err) {
+		fprintf(stderr, "error: failed to initalize freetype library: %s\n",
+				FT_Error_String(err));
+		exit(1);
+	}
+
+	char *font_file = GAME_DATA_DIR"/fonts/FreeSerifBoldItalic.ttf";
+	err = FT_New_Face(wl->ft_lib, font_file, 0, &wl->ft_face);
+	if (err) {
+		fprintf(stderr, "error: failed to load file %s: %s\n",
+				font_file, FT_Error_String(err));
+		exit(1);
+	}
+	wl->font_face = cairo_ft_font_face_create_for_ft_face(wl->ft_face, 0);
 }
 
 void
@@ -680,6 +756,8 @@ platform_Init(struct Wayland *wl, bool fullscreen)
 		fprintf(stderr, "no wl_shm, xdg_wm_base or wl_compositor\n");
 		exit(1);
 	}
+
+	platform_InitFont(wl);
 
 	wl->buffer = newBuffer(wl->width, wl->height, wl->shm);
 	clearBuffer(&wl->buffer);
@@ -742,7 +820,6 @@ struct xdg_wm_base_listener xdg_wm_base_listener = {
 static void
 platform_init_cursor(struct Wayland *wl)
 {
-	int i;
 	int cursor_size = 24;
 	char *env_cursor_size = getenv("XCURSOR_SIZE");
 	if (env_cursor_size && *env_cursor_size) {
@@ -755,7 +832,7 @@ platform_init_cursor(struct Wayland *wl)
 
 	char *cursor_theme = getenv("XCURSOR_THEME");
 	wl->pointer.theme = wl_cursor_theme_load(cursor_theme, cursor_size, wl->shm);
-	for (i = 0; i < sizeof(cursors) / sizeof(cursors[0]); i++) {
+	for (size_t i = 0; i < sizeof(cursors) / sizeof(cursors[0]); i++) {
 		cursors[i].cursor = wl_cursor_theme_get_cursor(wl->pointer.theme, cursors[i].name);
 	}
 	wl->pointer.cursor = cursors[0].cursor;
@@ -841,30 +918,8 @@ wl_surface_frame_done(void *data, struct wl_callback *cb, uint32_t time)
 	wl->game_input.ptr_x = wl->pointer.x;
 	wl->game_input.ptr_y = wl->pointer.y;
 
-	//printf("{");
-	//for (int i = 0; i < KEY_COUNT; i++) {
-	//	if (i > 0)
-	//		printf(", ");
-	//	KeySym st = wl->game_input.keys[0][i];
-	//	switch (st) {
-	//	case KEY_UNKNOWN:
-	//		printf("KEY_UNKNOWN");
-	//		break;
-	//	case KEY_PRESSED:
-	//		printf("KEY_PRESSED");
-	//		break;
-	//	case KEY_PRESSED_REPEAT:
-	//		printf("KEY_PRESSED_REPEAT");
-	//		break;
-	//	case KEY_RELEASED:
-	//		printf("KEY_RELEASED");
-	//		break;
-	//	}
-	//}
-	//printf("}\n");
-
 	if (!game_UpdateAndDraw(dt, wl->game_input, wl->width, wl->height)) {
-		wl.quit = true;
+		wl->quit = true;
 	}
 	for (int player = 0; player < 2; player++) {
 		for (int i = 0; i < KEY_COUNT; i++) {
@@ -874,6 +929,8 @@ wl_surface_frame_done(void *data, struct wl_callback *cb, uint32_t time)
 				break;
 			case KEY_RELEASED:
 				wl->game_input.keys[player][i] = KEY_UNKNOWN;
+				break;
+			default: // ignore
 				break;
 			}
 		}
@@ -887,43 +944,9 @@ wl_surface_frame_done(void *data, struct wl_callback *cb, uint32_t time)
 void
 run(struct Wayland *wl)
 {
-	fd_set fds;
-	int nfds = 0;
-	int wl_fd = wl_display_get_fd(wl.display);
-
-	int ret = 1;
-	while (ret > 0) {
-		ret = wl_display_dispatch_pending(wl.display);
-		wl_display_flush(wl.display);
+	while (!wl->quit && wl_display_dispatch(wl->display) != -1) {
+		// noop
 	}
-	if (ret < 0) {
-		perror(" wl_display_dispatch_pending");
-		exit(1);
-	}
-
-	while (!wl.quit) {
-		FD_ZERO(&fds);
-		FD_SET(wl_fd, &fds);
-		nfds = wl_fd;
-		select(nfds + 1, &fds, 0, 0, NULL);
-
-		if (FD_ISSET(wl_fd, &fds) && wl_display_dispatch(wl.display) == -1) {
-			perror("wl_display_dispatch");
-			exit(1);
-		}
-
-		if (wl_display_flush(wl.display) == -1 ) {
-			perror("wl_display_flush");
-			exit(1);
-		}
-	}
-
-	freeBuffer(&wl.buffer);
-	xdg_toplevel_destroy(wl.xdg_toplevel);
-	xdg_surface_destroy(wl.xdg_surface);
-	xdg_wm_base_destroy(wl.xdg_wm_base);
-	wl_surface_destroy(wl.surface);
-	wl_display_disconnect(wl.display);
 }
 
 int
@@ -956,6 +979,7 @@ main(int argc, char *argv[])
 	wl->height = LOGICAL_HEIGHT;
 
 	platform_Init(wl, fullscreen);
+
 	game_Init();
 
 	platform_Open(wl);
@@ -968,6 +992,17 @@ main(int argc, char *argv[])
 	run(wl);
 
 	game_Quit();
+
+	freeBuffer(&wl->buffer);
+	xdg_toplevel_destroy(wl->xdg_toplevel);
+	xdg_surface_destroy(wl->xdg_surface);
+	xdg_wm_base_destroy(wl->xdg_wm_base);
+	wl_surface_destroy(wl->surface);
+	wl_display_disconnect(wl->display);
+
+	cairo_font_face_destroy(wl->font_face);
+	FT_Done_Face(wl->ft_face);
+	FT_Done_Library(wl->ft_lib);
 
 	return 0;
 }

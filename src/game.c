@@ -17,43 +17,18 @@
  *  along with fuyunix.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include <assert.h>
 #include <limits.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <dirent.h>
 
-#include "platform.h"
 #include "game.h"
 #include "util.h"
 #include "fuyunix.h"
 #include "scfg.h"
-
-#ifndef GAME_DATA_DIR
-#define GAME_DATA_DIR "./data"
-#endif
-
-#define GRAVITY 98.0f
-#define TERMINAL_VELOCITY (GRAVITY * 1.2)
-#define JUMP_ACCEL 8
-#define SPEED_ACCEL 400.0f
-#define SPEED_MAX 800
-#define FRICTION 0.91f
-#define PROJ_DX 380.0f
-#define PROJ_RET 500
-#define PROJ_SIZE 12
-
-#define FRAME_NUM 3
-
-#define BLOCK_SIZE 32
-#define PLAYER_SIZE BLOCK_SIZE
-#define LOGICAL_WIDTH 900
-#define LOGICAL_HEIGHT 450
-#define MAX_STAGE_HEIGHT (LOGICAL_HEIGHT * 4)
-#define MAX_STAGE_LENGTH (LOGICAL_WIDTH * 10)
 
 static size_t stage_height = MAX_STAGE_HEIGHT;
 static size_t stage_length = MAX_STAGE_LENGTH;
@@ -62,7 +37,7 @@ static bool split_screen = true;
 
 struct Region {
 	game_Texture *t;
-	game_Rect rect;
+	struct game_Rect rect;
 };
 
 struct Level {
@@ -71,10 +46,9 @@ struct Level {
 	size_t regions_len;
 };
 
-static struct Level level;
-
 enum GameState {
 	STATE_MENU,
+	// TODO: level selection state.
 	STATE_PLAY,
 	STATE_PAUSE,
 	STATE_DEAD,
@@ -132,6 +106,11 @@ struct Game {
 	int numplayers;
 	int level;
 
+
+	int curLevel;
+	struct Level *levels;
+	int levels_len;
+
 	bool running;
 };
 
@@ -140,6 +119,8 @@ static struct Player player[2];
 
 struct TileTexture {
 	char *name;
+	int  len;
+
 	game_Texture *tile;
 };
 
@@ -148,23 +129,27 @@ static struct TileTexture tileTextures[] = {
 	{.name = "end"},
 	{.name = "enemy"},
 };
+
 static game_Texture *endPointTexture = NULL;
 
 void
 initTileTextures(void)
 {
 	char *tileDir = GAME_DATA_DIR"/tiles/";
+	int tileDirLen = strlen(tileDir);
 	char *ext = ".png";
-	char tileFile[PATH_MAX];
+	int extLen = strlen(ext);
+	char file[PATH_MAX];
 	for (size_t i = 0; i < (sizeof(tileTextures) / sizeof(tileTextures[0])); i++) {
 		struct TileTexture *t = &tileTextures[i];
-		strcpy(tileFile, tileDir);
-		strcat(tileFile, t->name);
-		strcat(tileFile, ext);
-		t->tile = platform_LoadTexture(tileFile);
-		// t->tile = IMG_LoadTexture(game.rnd, tileFile);
+		int nameLen = strlen(t->name);
+		memcpy(file, tileDir, tileDirLen);
+		memcpy(file + tileDirLen, t->name, nameLen);
+		memcpy(file + tileDirLen + nameLen, ext, extLen);
+		*(file + tileDirLen + nameLen + extLen) = 0;
+		t->tile = platform_LoadTexture(file);
 		if (t->tile == NULL) {
-			fprintf(stderr, "can't load tile %s from file %s\n", t->name, tileFile);
+			platform_Log("can't load tile %s from file %s\n", t->name, file);
 			continue;
 		}
 		if (strcmp(t->name, "end") == 0) {
@@ -186,7 +171,7 @@ getTileTexture(char *s)
 }
 
 bool
-game_HasIntersectionF(game_FRect a, game_FRect b)
+game_HasIntersectionF(struct game_FRect a, struct game_FRect b)
 {
 	return (a.x < b.x + b.w && a.x + a.w > b.x) &&
 			(a.y < b.y + b.h && a.y + a.h > b.y);
@@ -216,7 +201,7 @@ loadPlayerImages(int i)
 			player[i].frame[frame] = platform_LoadTexture(path);
 
 			if (player[i].frame[frame] == NULL) {
-				fprintf(stderr, "Unable to load image texture: %s\n", path);
+				platform_Log("Unable to load image texture: %s\n", path);
 			}
 		}
 	}
@@ -265,17 +250,14 @@ freePlayerTextures(void)
 			platform_DestroyTexture(player[i].frame[frame]);
 }
 
-static void
-loadLevels(void)
+static struct Level
+loadLevel(char *file)
 {
+	struct Level level = {0};
 	struct scfg_block block;
-
-	char *levelPath = GAME_DATA_DIR"/levels/1";
-
-	// TODO: Allow loading levels from $XDG_DATA_HOME
-	if (scfg_load_file(&block, levelPath) < 0) {
-		perror(levelPath);
-		exit(1);
+	if (scfg_load_file(&block, file) < 0) {
+		platform_Log("Failed to load file %s\n", file);
+		return level;
 	}
 
 	level.regions = ecalloc(block.directives_len, sizeof(struct Region));
@@ -284,10 +266,10 @@ loadLevels(void)
 	for (size_t i = 0; i < block.directives_len; ++i) {
 		if (strcmp(block.directives[i].name, "stage_length") == 0) {
 			if (block.directives[i].params_len != 1) {
-				fprintf(stderr, "%s:%d Expected 1 field for stage_length got %zu\n",
-						levelPath,
+				platform_Log("%s:%d Expected 1 field for stage_length got %d\n",
+						file,
 						block.directives[i].lineno,
-						block.directives[i].params_len);
+						(int)block.directives[i].params_len);
 			}
 			level.stage_length = atoi(block.directives[i].params[0]);
 			if (level.stage_length <= 0 || level.stage_length > MAX_STAGE_LENGTH)
@@ -298,15 +280,16 @@ loadLevels(void)
 		}
 
 		if (block.directives[i].params_len != 4) {
-			fprintf(stderr, "%s:%d Expected 5 fields got %zu\n", levelPath,
-					block.directives[i].lineno,
-					block.directives[i].params_len);
+			platform_Log("%s:%d Expected 5 fields got %d\n",
+				file,
+				block.directives[i].lineno,
+				(int)block.directives[i].params_len);
 			continue;
 		};
 
 		game_Texture *t = getTileTexture(block.directives[i].name);
 		if (t == NULL) {
-			fprintf(stderr, "%s:%d: unknown tile %s\n", levelPath,
+			platform_Log("%s:%d: unknown tile %s\n", file,
 					block.directives[i].lineno,
 					block.directives[i].name);
 			continue;
@@ -320,29 +303,73 @@ loadLevels(void)
 
 		level.regions[level.regions_len] = (struct Region){
 			.t = t,
-			.rect = (game_Rect){
-				coords[0],
-				coords[1],
-				coords[2],
-				coords[3],
-			},
+				.rect = (struct game_Rect){
+					coords[0],
+					coords[1],
+					coords[2],
+					coords[3],
+				},
 		};
 		level.regions_len++;
 	}
 	stage_length = level.stage_length;
 	if (level.regions_len == 0) {
-		fprintf(stderr, "Unable to read any data from file %s\n", levelPath);
-		exit(1);
+		platform_Log("Unable to read any data from file %s\n", file);
+		free(level.regions);
 	}
 	scfg_block_finish(&block);
+
+	return level;
+}
+
+static void
+loadLevels(void)
+{
+	struct Level *levels = NULL;
+	int levels_len = 0;
+
+	// TODO: Allow loading levels from $XDG_DATA_HOME
+	char *levelDir = GAME_DATA_DIR"/levels/";
+
+	DIR *d = opendir(levelDir);
+	if (d == NULL) {
+		platform_Log("can't open directory %s\n", levelDir);
+		return;
+	}
+	struct dirent *f = NULL;
+	char path[PATH_MAX];
+	int levelDirLen = strlen(levelDir);
+	memcpy(path, levelDir, levelDirLen);
+	while ((f = readdir(d)) != NULL) {
+		if (strcmp(f->d_name, ".") == 0 || strcmp(f->d_name, "..") == 0) {
+			continue;
+		}
+		int len = strlen(f->d_name);
+		memcpy(path+levelDirLen, f->d_name, len);
+		*(path+levelDirLen+len) = 0;
+		struct Level l = loadLevel(path);
+		if (l.regions == NULL || l.regions_len == 0) {
+			continue;
+		}
+
+		levels_len++;
+		levels = erealloc(levels, levels_len * sizeof(*levels));
+		levels[levels_len-1] = l;
+	}
+	closedir(d);
+
+	game.levels = levels;
+	game.levels_len = levels_len;
 }
 
 void
 game_Init(void)
 {
-	game.state = STATE_MENU;
-	game.level = readSaveFile();
+	struct game_Data data = {0};
+	platform_ReadSaveData(&data);
+	game.level = data.level;
 
+	game.state = STATE_MENU;
 	game.numplayers = 0;
 	game.running = true;
 
@@ -350,7 +377,12 @@ game_Init(void)
 	game.h = LOGICAL_HEIGHT;
 
 	initTileTextures();
+
 	loadLevels();
+	if (game.levels_len <= 0) {
+		platform_Log("failed to load levels\n");
+		exit(1);
+	}
 
 	player[0].proj.x = -1;
 	player[0].proj.y = -1;
@@ -370,16 +402,22 @@ game_Quit(void)
 {
 	freePlayerTextures();
 
-	free(level.regions);
-	level.regions_len = 0;
+	for (int i = 0; i < game.levels_len; i++) {
+		free(game.levels[i].regions);
+	}
+	free(game.levels);
+	game.levels_len = 0;
 
-	writeSaveFile(game.level);
+	struct game_Data data = {
+		.level = game.level,
+	};
+	platform_WriteSaveData(&data);
 }
 
 static void
 drwText(char *text, int x, int y, int size)
 {
-	game_Color fg = {
+	struct game_Color fg = {
 		.a = 0xFF,
 		.r = 0xFF,
 		.g = 0xFF,
@@ -402,18 +440,24 @@ drwTextScreenCentered(char *text, int size)
 static void
 drwHomeMenu(int gaps, int focus, int size, int width, int height)
 {
-	game_Rect options[3] = {
+	struct game_Rect options[3] = {
 		{gaps, gaps + size, width, height},
 		{gaps, gaps + size * 2, width, height},
 		{gaps, gaps + size * 3, width, height},
 	};
 
-	platform_FillRects(GAME_RGB(20, 150, 180), options, 3);
-	platform_FillRect(GAME_RGB(20, 190, 180), &options[focus]);
+	int textSize = game.h * 36 / LOGICAL_HEIGHT;
+
+	for (size_t i = 0; i < sizeof(options) / sizeof(options[0]); i++) {
+		if ((int)i == focus) {
+			platform_FillRect(GAME_RGB(20, 190, 180), &options[i]);
+		} else {
+			platform_FillRect(GAME_RGB(20, 150, 180), &options[i]);
+		}
+	}
 
 	char nplayer[] = {game.numplayers + '1', '\0'};
 
-	int textSize = 32;
 	double offset = (double)height / 2.0;
 	drwText(NAME, gaps, offset, textSize*2);
 
@@ -422,7 +466,7 @@ drwHomeMenu(int gaps, int focus, int size, int width, int height)
 	drwText("Start", gaps*2, offset + size, textSize);
 
 	int w = 0;
-	platform_MeasureText(nplayer, size, &w, NULL);
+	platform_MeasureText(nplayer, textSize, &w, NULL);
 
 	drwText("Choose players", gaps*2, offset + size * 2, textSize);
 	drwText(nplayer, width - w, offset + size * 2, textSize);
@@ -552,7 +596,7 @@ playerVerticalCollision(int i)
 	if (dy == 0)
 		return player[i].y;
 
-	game_FRect p = {
+	struct game_FRect p = {
 		(float)player[i].x,
 		(float)player[i].y,
 		(float)player[i].w,
@@ -560,17 +604,18 @@ playerVerticalCollision(int i)
 	};
 
 	struct Region *reg = NULL;
-	for (size_t j = 0; j < level.regions_len; j++) {
+	struct Level *level = &game.levels[game.curLevel];
+	for (size_t j = 0; j < level->regions_len; j++) {
 		//if (level.regions[j].rect.x + level.regions[j].rect.w < p.x)
 		//	continue;
 		//if (p.x + p.w < level.regions[j].rect.x)
 		//	continue;
 
-		game_FRect r = {
-			.x = (float)level.regions[j].rect.x,
-			.y = (float)level.regions[j].rect.y,
-			.w = (float)level.regions[j].rect.w,
-			.h = (float)level.regions[j].rect.h,
+		struct game_FRect r = {
+			.x = (float)level->regions[j].rect.x,
+			.y = (float)level->regions[j].rect.y,
+			.w = (float)level->regions[j].rect.w,
+			.h = (float)level->regions[j].rect.h,
 		};
 		// TODO: this code will allow for clipping, we should go
 		// through all the regions and choose the one in between the
@@ -582,7 +627,7 @@ playerVerticalCollision(int i)
 				//	reg = &level.regions[j];
 				//}
 			} else {
-				reg = &level.regions[j];
+				reg = &level->regions[j];
 			}
 		}
 	}
@@ -634,26 +679,27 @@ playerHorizontalCollision(int i)
 	if (dx == 0)
 		return player[i].x;
 
-	game_FRect p = {
+	struct game_FRect p = {
 		(float)player[i].x,
 		(float)player[i].y,
 		(float)player[i].w + dx,
 		(float)player[i].h
 	};
 
-	for (size_t j = 0; j < level.regions_len; j++) {
-		game_FRect r = {
-			.x = (float)level.regions[j].rect.x,
-			.y = (float)level.regions[j].rect.y,
-			.w = (float)level.regions[j].rect.w,
-			.h = (float)level.regions[j].rect.h,
+	struct Level *level = &game.levels[game.curLevel];
+	for (size_t j = 0; j < level->regions_len; j++) {
+		struct game_FRect r = {
+			.x = (float)level->regions[j].rect.x,
+			.y = (float)level->regions[j].rect.y,
+			.w = (float)level->regions[j].rect.w,
+			.h = (float)level->regions[j].rect.h,
 		};
 		// TODO: this code will allow for clipping, we should go
 		// through all the regions and choose the one in between the
 		// initial and final postition of player and choose the
 		// platform that's closest to the initial position of player.
 		if (game_HasIntersectionF(p, r)) {
-			if (level.regions[j].t == endPointTexture) {
+			if (level->regions[j].t == endPointTexture) {
 				game.state = STATE_WON;
 				return player[i].x;
 			}
@@ -727,13 +773,13 @@ movePlayerProjectile(int i, float dt)
 		return;
 	}
 	if (player[i].proj.retToPlayer) {
-		game_FRect pl = {
+		struct game_FRect pl = {
 			player[i].x,
 			player[i].y,
 			player[i].w,
 			player[i].h
 		};
-		game_FRect pr = {
+		struct game_FRect pr = {
 			player[i].proj.x,
 			player[i].proj.y,
 			PROJ_SIZE,
@@ -803,7 +849,7 @@ movePlayers(float dt)
 static void
 drawPlayer(int i, double x, double y, double w, double h, double cam_x, double cam_y)
 {
-	game_Rect playRect = {
+	struct game_Rect playRect = {
 		x + player[i].x - cam_x,
 		y + player[i].y - cam_y,
 		player[i].w,
@@ -828,13 +874,13 @@ drawPlayer(int i, double x, double y, double w, double h, double cam_x, double c
 		}
 		platform_FillRect(GAME_RGB(0, 0, 0), &playRect);
 	} else {
-		game_Rect s = {
+		struct game_Rect s = {
 			.x = 0,
 			.y = 0,
 			.w = player[i].w,
 			.h = player[i].h,
 		};
-		game_Rect p = playRect;
+		struct game_Rect p = playRect;
 		if (p.x + p.w > x + w) {
 			p.w = x + w - p.x;
 		}
@@ -854,7 +900,7 @@ drawPlayer(int i, double x, double y, double w, double h, double cam_x, double c
 			player[i].proj.y - cam_y < h &&
 			player[i].proj.x - cam_x >= 0 &&
 			player[i].proj.y - cam_y >= 0) {
-		game_Rect projRect = {
+		struct game_Rect projRect = {
 			x + player[i].proj.x - cam_x,
 			y + player[i].proj.y - cam_y,
 			PROJ_SIZE,
@@ -882,43 +928,50 @@ drwPlayers(void)
 			}
 			drawPlayer(i, x, y, w, h, cam_x, cam_y);
 		}
+		// TODO: change the camera so player can always be seen.
 		drawPlayer(j, x, y, w, h, cam_x, cam_y);
 	}
 }
 
-
 static void
-drawPlatform(game_Texture *t, game_Rect r, game_Rect d)
+drawPlatform(game_Texture *t, struct game_Rect rect, struct game_Rect screen)
 {
-	for (int y = r.y; y < r.y + r.h; y += BLOCK_SIZE) {
-		if (y + BLOCK_SIZE < 0 || y > d.h) {
+	for (int y = rect.y; y < rect.y + rect.h; y += BLOCK_SIZE) {
+		if (y + BLOCK_SIZE < 0 || y > screen.h) {
 			continue;
 		}
-		game_Rect f = r;
-		f.h = BLOCK_SIZE;
-		if (y + f.h > d.h) {
-			f.h = d.h - y;
+		struct game_Rect d = rect;
+		d.h = BLOCK_SIZE;
+		if (y + d.h > screen.h) {
+			d.h = screen.h - y;
 		}
-		f.y = y + d.y;
-		if (f.y < d.y) {
-			f.h -= d.y - f.y;
-			f.y = d.y;
+		d.y = y + screen.y;
+		if (d.y < screen.y) {
+			d.h -= screen.y - d.y;
+			d.y = screen.y;
 		}
-		for (int x = r.x; x < r.x + r.w; x += BLOCK_SIZE) {
-			if (x + BLOCK_SIZE < 0 || x > d.w) {
+		for (int x = rect.x; x < rect.x + rect.w; x += BLOCK_SIZE) {
+			if (x + BLOCK_SIZE < 0 || x > screen.w) {
 				continue;
 			}
-			f.w = BLOCK_SIZE;
-			if (x + f.w > d.w) {
-				f.w = d.w - x;
+			d.w = BLOCK_SIZE;
+			if (x + d.w > screen.w) {
+				d.w = screen.w - x;
 			}
-			f.x = x + d.x;
-			if (f.x < d.x) {
-				f.w -= d.x - f.x;
-				f.x = d.x;
+			d.x = x + screen.x;
+			if (d.x < screen.x) {
+				d.w -= screen.x - d.x;
+				d.x = screen.x;
 			}
 
-			platform_DrawTexture(t, NULL, &f);
+			// TODO: this isn't quite it, but good enough for now.
+			struct game_Rect s = {
+				.x = 0,
+				.y = 0,
+				.w = d.w,
+				.h = d.h,
+			};
+			platform_DrawTexture(t, &s, &d);
 		}
 	}
 }
@@ -926,17 +979,18 @@ drawPlatform(game_Texture *t, game_Rect r, game_Rect d)
 static void
 drwPlatforms(void)
 {
-	for (size_t i = 0; i < level.regions_len; i++) {
+	struct Level *level = &game.levels[game.curLevel];
+	for (size_t i = 0; i < level->regions_len; i++) {
 		for (int j = 0; j <= game.numplayers; j++) {
 			double *cam_y = &game.screens[j].cam_y;
 			double *cam_x = &game.screens[j].cam_x;
-			game_Rect r = {
-				.x = level.regions[i].rect.x - *cam_x,
-				.y = level.regions[i].rect.y - *cam_y,
-				.w = level.regions[i].rect.w,
-				.h = level.regions[i].rect.h,
+			struct game_Rect r = {
+				.x = level->regions[i].rect.x - *cam_x,
+				.y = level->regions[i].rect.y - *cam_y,
+				.w = level->regions[i].rect.w,
+				.h = level->regions[i].rect.h,
 			};
-			game_Rect dst = {
+			struct game_Rect dst = {
 				.x = game.screens[j].x,
 				.y = game.screens[j].y,
 				.w = game.screens[j].w,
@@ -947,13 +1001,13 @@ drwPlatforms(void)
 				continue;
 			}
 
-			drawPlatform(level.regions[i].t, r, dst);
+			drawPlatform(level->regions[i].t, r, dst);
 		}
 	}
 }
 
 void
-drw(game_Rect screenRect)
+drw(void)
 {
 	static int death_alpha = 0;
 	if (game.state != STATE_DEAD) death_alpha = 0;
@@ -994,7 +1048,7 @@ drw(game_Rect screenRect)
 		break;
 	case STATE_PLAY:
 		/* Change background to color: "#114261" */
-		platform_FillRect(GAME_RGB(0x11, 0x41, 0x61), &screenRect);
+		platform_FillRect(GAME_RGB(0x11, 0x41, 0x61), NULL);
 
 		movePlayers(game.dt);
 
@@ -1016,7 +1070,7 @@ drw(game_Rect screenRect)
 		// TODO: menu or at least keys to restart the level or go back
 		// to main menu
 		if (death_alpha < 255) {
-			platform_FillRect(GAME_RGB(0x11, 0x41, 0x61), &screenRect);
+			platform_FillRect(GAME_RGB(0x11, 0x41, 0x61), NULL);
 			drwPlatforms();
 			drwPlayers();
 
@@ -1034,13 +1088,13 @@ drw(game_Rect screenRect)
 		break;
 	}
 	case STATE_PAUSE:
-		platform_FillRect(GAME_RGB(0x11, 0x41, 0x61), &screenRect);
+		platform_FillRect(GAME_RGB(0x11, 0x41, 0x61), NULL);
 
 		drwPlatforms();
 		drwPlayers();
 
 		// TODO: a pause menu
-		game_Rect r = {
+		struct game_Rect r = {
 			.x = game.w / 2 - BLOCK_SIZE,
 			.y = game.h / 2 - 2 * BLOCK_SIZE,
 			.w = BLOCK_SIZE,
@@ -1182,25 +1236,13 @@ static void
 game_Draw(double dt, int width, int height)
 {
 	game.dt = dt;
-	game_Rect screenRect = {
-		0,
-		0,
-		game.w,
-		game.h,
-	};
-
-	game.scale = 1;
-	if (width > LOGICAL_WIDTH && height > LOGICAL_HEIGHT) {
-		game.scale = 1;
-
-		// TODO
-	}
-
-	drw(screenRect);
+	game.w = width;
+	game.h = height;
+	drw();
 }
 
 static void
-game_Update(game_Input input, double dt, int width, int height)
+game_Update(struct game_Input input, double dt, int width, int height)
 {
 	for (int player = 0; player < 2; player++) {
 		for (int i = 0; i < KEY_COUNT; i++) {
@@ -1225,8 +1267,20 @@ game_Update(game_Input input, double dt, int width, int height)
 }
 
 bool
-game_UpdateAndDraw(double dt, game_Input input, int width, int height)
+game_UpdateAndDraw(double dt, struct game_Input input, int width, int height)
 {
+	game.screens[0].x = 0;
+	game.screens[0].y = 0;
+	game.screens[0].w = width;
+	game.screens[0].h = height;
+	if (game.numplayers == 1) {
+		game.screens[0].w = width/2;
+	}
+	game.screens[1].x = width/2;
+	game.screens[1].y = 0;
+	game.screens[1].w = width/2;
+	game.screens[1].h = height;
+
 	game_Update(input, dt, width, height);
 	game_Draw(dt, width, height);
 	return game.running;

@@ -3,4 +3,5 @@ void *ecalloc(size_t nmemb, size_t size);
 int readSaveFile(void);
 void writeSaveFile(int level);
 char *readKeyConf(char *filename);
-char *getPath(char *fullpath, char *xdg, char *file, int createDir);
+int getConfigDir(char *path, size_t path_len);
+bool getConfigFile(char *path, size_t path_len);

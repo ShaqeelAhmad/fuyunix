@@ -17,6 +17,7 @@
  *  along with fuyunix.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <assert.h>
 #include <SDL.h>
 #include <SDL_image.h>
 #include <SDL_ttf.h>
@@ -26,6 +27,7 @@
 
 #include "game.h"
 #include "fuyunix.h"
+#include "scfg.h"
 
 static SDL_Window   *window;
 static SDL_Renderer *renderer;
@@ -40,7 +42,7 @@ negativeDie(int x)
 	}
 }
 
-	static void *
+static void *
 nullDie(void *p)
 {
 	if (p == NULL) {
@@ -50,6 +52,28 @@ nullDie(void *p)
 	return p;
 }
 
+void
+platform_Log(char *fmt, ...)
+{
+	va_list ap;
+	va_start(ap, fmt);
+	SDL_LogMessageV(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_VERBOSE, fmt, ap);
+	va_end(ap);
+}
+
+bool
+platform_ReadSaveData(struct game_Data *data)
+{
+	int level = readSaveFile();
+	data->level = level;
+	return true;
+}
+
+void
+platform_WriteSaveData(struct game_Data *data)
+{
+	writeSaveFile(data->level);
+}
 
 game_Texture *
 platform_LoadTexture(char *file)
@@ -64,7 +88,7 @@ platform_DestroyTexture(game_Texture *t)
 }
 
 void
-platform_RenderText(char *text, int size, game_Color fg, int x, int y)
+platform_RenderText(char *text, int size, struct game_Color fg, int x, int y)
 {
 	TTF_SetFontSize(font, size);
 	SDL_Color c = {
@@ -101,22 +125,9 @@ platform_MeasureText(char *text, int size, int *w, int *h)
 		exit(1);
 	}
 }
+
 void
-platform_FillRects(game_Color c, game_Rect *rects, int count)
-{
-	SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
-	for (int i = 0; i < count; i++) {
-		SDL_Rect r = {
-			.x = rects[i].x,
-			.y = rects[i].y,
-			.w = rects[i].w,
-			.h = rects[i].h,
-		};
-		SDL_RenderFillRect(renderer, &r);
-	}
-}
-void
-platform_FillRect(game_Color c, game_Rect *rect)
+platform_FillRect(struct game_Color c, struct game_Rect *rect)
 {
 	SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
 	if (rect == NULL) {
@@ -133,7 +144,7 @@ platform_FillRect(game_Color c, game_Rect *rect)
 }
 
 void
-platform_DrawTexture(game_Texture *t, game_Rect *src, game_Rect *dst)
+platform_DrawTexture(game_Texture *t, struct game_Rect *src, struct game_Rect *dst)
 {
 	SDL_Rect *s = NULL;
 	SDL_Rect *d = NULL;
@@ -162,14 +173,14 @@ platform_DrawTexture(game_Texture *t, game_Rect *src, game_Rect *dst)
 	}
 }
 void
-platform_Clear(game_Color c)
+platform_Clear(struct game_Color c)
 {
 	SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
 	SDL_RenderClear(renderer);
 
 }
 void
-platform_DrawLine(game_Color c, int x1, int y1, int x2, int y2)
+platform_DrawLine(struct game_Color c, int x1, int y1, int x2, int y2)
 {
 	SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
 	SDL_RenderDrawLine(renderer, x1, y2, x2, y2);
@@ -185,9 +196,6 @@ platform_Init(int flags)
 				LOGICAL_HEIGHT, flags));
 	renderer = nullDie(SDL_CreateRenderer(window, -1,
 				SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC));
-
-	// TODO: pass actual size to game so it can draw it handles the scaling.
-	// SDL_RenderSetLogicalSize(renderer, LOGICAL_WIDTH, LOGICAL_HEIGHT);
 
 	if (TTF_Init() < 0){
 		fprintf(stderr, "SDL_TTF: TTF_Init: %s\n", TTF_GetError());
@@ -206,6 +214,8 @@ platform_Init(int flags)
 		fprintf(stderr, "IMG_Init: %s\n", IMG_GetError());
 		exit(1);
 	}
+
+	SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 }
 
 static void
@@ -289,7 +299,9 @@ loadConfig(void)
 	int keylist_len = 0;
 	struct scfg_block block;
 
-	getPath(filepath, "XDG_CONFIG_HOME", "/config", 0);
+	if (!getConfigFile(filepath, sizeof(filepath))) {
+		goto default_config;
+	}
 	if (scfg_load_file(&block, filepath) < 0) {
 		perror(filepath);
 		goto default_config;
@@ -391,27 +403,18 @@ gameKey(SDL_Scancode code, int *p)
 	case SDL_SCANCODE_RETURN: // fallthrough
 	case SDL_SCANCODE_SPACE:
 		return KEY_SELECT;
+	default:
+		return -1;
 	}
-	return -1;
 }
 
 static void
 run(void)
 {
-	const Uint8 *keyboardState = SDL_GetKeyboardState(NULL);
 	SDL_Event event;
 	uint32_t t = SDL_GetTicks();
+	struct game_Input input = {0};
 	while (true) {
-		game_Input input = {0};
-		for (int i = 0; i < keys.keylen; i++) {
-			SDL_Scancode code = keys.key[i].key;
-			if (keyboardState[code]) {
-				KeySym key = keys.key[i].sym;
-				int player = keys.key[i].player;
-				input.keys[player][key] = KEY_PRESSED_REPEAT;
-			}
-		}
-
 		while (SDL_PollEvent(&event) != 0) {
 			if (event.type == SDL_QUIT)
 				return;
@@ -436,6 +439,21 @@ run(void)
 			return;
 		}
 		SDL_RenderPresent(renderer);
+
+		for (int player = 0; player < 2; player++) {
+			for (int i = 0; i < KEY_COUNT; i++) {
+				switch (input.keys[player][i]) {
+				case KEY_PRESSED:
+					input.keys[player][i] = KEY_PRESSED_REPEAT;
+					break;
+				case KEY_RELEASED:
+					input.keys[player][i] = KEY_UNKNOWN;
+					break;
+				default: // ignore
+					break;
+				}
+			}
+		}
 	}
 }
 
