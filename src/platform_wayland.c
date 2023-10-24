@@ -5,7 +5,6 @@
 #include <stdio.h>
 #include <sys/mman.h>
 #include <sys/select.h>
-#include <sys/timerfd.h>
 #include <time.h>
 #include <unistd.h>
 #include <wayland-client.h>
@@ -89,6 +88,30 @@ struct Wayland {
 struct Wayland wayland;
 
 #define CAIRO_RGBA(c) (c.r / 255.0), (c.g / 255.0), (c.b / 255.0), (c.a / 255.0)
+
+void
+platform_DrawTrail(int x1, int y1, int x2, int y2, int size, struct game_Color color)
+{
+	cairo_t *cr = wayland.buffer.cr;
+	cairo_pattern_t *pat;
+	pat = cairo_pattern_create_radial(x1, y1, size/2, x2, y2, size/2);
+
+	color.a = 0;
+	cairo_pattern_add_color_stop_rgba(pat, 1, CAIRO_RGBA(color));
+
+	color.a = 0xff;
+	cairo_pattern_add_color_stop_rgba(pat, 0, CAIRO_RGBA(color));
+
+	cairo_move_to(cr, x1, y1);
+	cairo_line_to(cr, x1, y2);
+	cairo_line_to(cr, x2, y2);
+	cairo_line_to(cr, x2, y1);
+	cairo_close_path(cr);
+
+	cairo_set_source(cr, pat);
+	cairo_fill(cr);
+	cairo_pattern_destroy(pat);
+}
 
 game_Texture *
 platform_LoadTexture(char *file)

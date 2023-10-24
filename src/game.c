@@ -59,8 +59,6 @@ struct Player {
 	game_Texture *frame[FRAME_NUM];
 	game_Texture **current;
 
-	double x;
-	double y;
 
 	struct {
 		bool active;
@@ -72,9 +70,18 @@ struct Player {
 		double dy;
 	} proj;
 
+	struct {
+		double x;
+		double y;
+		double dx;
+		double dy;
+		struct game_Color color;
+	} trail;
+
+	double x;
+	double y;
 	double dx;
 	double dy;
-
 	double w;
 	double h;
 
@@ -246,6 +253,17 @@ loadPlayerTextures(void)
 
 		player[i].proj.x = -1;
 		player[i].proj.y = -1;
+
+		player[i].trail.x = 0;
+		player[i].trail.y = 0;
+		player[i].trail.dx = 0;
+		player[i].trail.dy = 0;
+		player[i].trail.color = (struct game_Color){
+			.r = 0x11,
+			.g = 0x0F,
+			.b = 0xF0,
+			.a = 0xFF,
+		};
 
 		player[i].w = PLAYER_SIZE;
 		player[i].h = PLAYER_SIZE;
@@ -819,6 +837,39 @@ movePlayerProjectile(int i, float dt)
 }
 
 static void
+movePlayerTrail(int i, float dt)
+{
+	struct game_FRect pRect = {
+		player[i].x,
+		player[i].y,
+		player[i].w,
+		player[i].h
+	};
+	struct game_FRect tRect = {
+		player[i].trail.x,
+		player[i].trail.y,
+		1,
+		1,
+	};
+	if (game_HasIntersectionF(pRect, tRect)) {
+		player[i].trail.dx = 0;
+		player[i].trail.dy = 0;
+	} else {
+		int target_x = player[i].x + player[i].w/2;
+		int target_y = player[i].y + player[i].h/2;
+
+#define TRAIL_NORMALIZER 0.001
+		double dx = (double)target_x - player[i].trail.x;
+		player[i].trail.dx = TRAIL_NORMALIZER * dx * dx * dx;
+		double dy = (double)target_y - player[i].trail.y;
+		player[i].trail.dy = TRAIL_NORMALIZER * dy * dy * dy;;
+
+		player[i].trail.x += player[i].trail.dx * dt;
+		player[i].trail.y += player[i].trail.dy * dt;
+	}
+}
+
+static void
 movePlayerHorizontal(int i, float dt)
 {
 	if ((player[i].x <= 0 && player[i].dx < 0)
@@ -843,6 +894,7 @@ movePlayers(float dt)
 		movePlayerVertical(i, dt);
 		movePlayerHorizontal(i, dt);
 		movePlayerProjectile(i, dt);
+		movePlayerTrail(i, dt);
 	}
 
 	moveCameras();
@@ -864,6 +916,13 @@ drawPlayer(int i, double x, double y, double w, double h, double cam_x, double c
 	if (playRect.y + playRect.h  < y || playRect.y > y + h) {
 		return;
 	}
+
+	platform_DrawTrail(
+			playRect.x + playRect.w / 2,
+			playRect.y + playRect.h / 2,
+			x + player[i].trail.x - cam_x,
+			y + player[i].trail.y - cam_y,
+			playRect.w, player[i].trail.color);
 
 	/* Draw a black square in place of texture that failed to load */
 	if (*player[i].current == NULL) {

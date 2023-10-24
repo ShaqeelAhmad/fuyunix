@@ -26,6 +26,8 @@
 #define MAX_STAGE_HEIGHT (LOGICAL_HEIGHT * 4)
 #define MAX_STAGE_LENGTH (LOGICAL_WIDTH * 10)
 
+#define PI 3.14159265358979323846264338327950288419716939937510582097494459
+
 typedef enum {
 	KEY_UP,
 	KEY_DOWN,
@@ -84,6 +86,7 @@ void game_Init(void);
 bool game_UpdateAndDraw(double dt, struct game_Input input, int width, int height);
 void game_Quit(void);
 
+void platform_DrawTrail(int x1, int y1, int x2, int y2, int size, struct game_Color color);
 game_Texture *platform_LoadTexture(char *file);
 void platform_DestroyTexture(game_Texture *t);
 void platform_RenderText(char *text, int size, struct game_Color fg, int x, int y);

@@ -29,24 +29,24 @@ man: fuyunix.6
 fuyunix.6:
 	scdoc < fuyunix.6.scd > fuyunix.6
 
-install: all
+install-fuyunix: fuyunix
 	mkdir -p $(BINDIR)
 	cp -f fuyunix $(BINDIR)
 	chmod 755 $(BINDIR)/fuyunix
 	mkdir -p $(DATADIR)/fuyunix/
 	cp -rf data/ $(DATADIR)/fuyunix/
+
+install-man: man
 	mkdir -p $(MANDIR)
 	cp -f fuyunix.6 $(MANDIR)/fuyunix.6
 	chmod 644 $(MANDIR)/fuyunix.6
+
+install: install-fuyunix install-man
 
 uninstall:
 	rm -f $(BINDIR)/fuyunix
 	rm -rf $(DATADIR)/fuyunix
 	rm -f $(MANDIR)/fuyunix.6
-
-sdl:
-
-wayland: $(WL_HDR) $(WL_SRC)
 
 xdg-shell-protocol.c:
 	$(WL_SCANNER) private-code $(XDG_SHELL) $@
@@ -60,7 +60,11 @@ xdg-decoration-unstable-protocol.c:
 xdg-decoration-unstable-client-protocol.h:
 	$(WL_SCANNER) client-header $(XDG_DECORATION) $@
 
-fuyunix: src/*.c $(TARGET)
+unity_sdl.c:
+
+unity_wayland.c: $(WL_HDR) $(WL_SRC)
+
+fuyunix: src/*.c unity_$(TARGET).c
 	$(CC) unity_$(TARGET).c -o $@ $(CFLAGS) $(LDFLAGS)
 
 .PHONY: clean install uninstall

@@ -53,6 +53,17 @@ nullDie(void *p)
 }
 
 void
+platform_DrawTrail(int x1, int y1, int x2, int y2, int size, struct game_Color c)
+{
+	// TODO: implement draw trail for sdl
+	//SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
+	//SDL_RenderDrawLine(renderer, x1, y1, x1, y2);
+	//SDL_RenderDrawLine(renderer, x1, y2, x2, y2);
+	//SDL_RenderDrawLine(renderer, x2, y2, x2, y1);
+	//SDL_RenderDrawLine(renderer, x2, y1, x1, y1);
+}
+
+void
 platform_Log(char *fmt, ...)
 {
 	va_list ap;
