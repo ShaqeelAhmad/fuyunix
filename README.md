@@ -2,18 +2,25 @@
 
 **NOTE: this game is still under early stages of development**
 
-A small platformer game using SDL2
+A platformer game.
 
 ## Dependencies
-- c11 C compiler*
+
+- c11 C compiler
+- make
+- scdoc (optional, for manpages)
+
 - sdl2 >= 2.0.22
 - sdl2_image
 - sdl2_ttf
-- make
-- scdoc (for manpages)
 
-\* Only tcc, gcc and clang are tested.
-Other compilers might not work.
+Alternative dependencies, if you want to use the native wayland instead of SDL
+(set TARGET to wayland in config.mk):
+
+- libwayland
+- xkbcommon
+- cairo
+- freetype2
 
 ## Portablility
 
@@ -36,10 +43,19 @@ TBD
 `data/` contains the assets
 
 ## Installation
+
 ```
 $ cp config.def.mk config.mk
 $ make
 # make install
+```
+
+Alternatively, if you didn't install `scdoc` or don't want manpages.
+
+```
+$ cp config.def.mk config.mk
+$ make fuyunix
+# make install-fuyunix
 ```
 
 Modify `config.mk` for configurations.

@@ -66,4 +66,4 @@ unity_wayland.c: $(WL_HDR) $(WL_SRC)
 fuyunix: src/*.c unity_$(TARGET).c
 	$(CC) unity_$(TARGET).c -o $@ $(CFLAGS) $(LDFLAGS)
 
-.PHONY: clean install uninstall
+.PHONY: clean install uninstall install-fuyunix
