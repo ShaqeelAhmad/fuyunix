@@ -61,6 +61,9 @@ struct game_Input {
 	int ptr_y;
 };
 
+struct game_V2 {
+	int x, y;
+};
 struct game_Rect {
 	int x, y, w, h;
 };

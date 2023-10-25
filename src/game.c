@@ -44,6 +44,8 @@ struct Level {
 	size_t stage_length;
 	struct Region *regions;
 	size_t regions_len;
+
+	struct game_V2 end;
 };
 
 enum GameState {
@@ -126,15 +128,16 @@ static struct Player player[MAX_PLAYERS];
 
 struct TileTexture {
 	char *name;
-	int  len;
 
 	game_Texture *tile;
 };
 
+enum Tile {
+	TILE_SNOW,
+};
+
 static struct TileTexture tileTextures[] = {
-	{.name = "snow"},
-	{.name = "end"},
-	{.name = "enemy"},
+	[TILE_SNOW] = {"snow"},
 };
 
 static game_Texture *endPointTexture = NULL;
@@ -159,9 +162,18 @@ initTileTextures(void)
 			platform_Log("can't load tile %s from file %s\n", t->name, file);
 			continue;
 		}
-		if (strcmp(t->name, "end") == 0) {
-			endPointTexture = t->tile;
-		}
+	}
+
+	char *name = "end";
+	int nameLen = strlen(name);
+
+	memcpy(file, tileDir, tileDirLen);
+	memcpy(file + tileDirLen, name, nameLen);
+	memcpy(file + tileDirLen + nameLen, ext, extLen);
+	*(file + tileDirLen + nameLen + extLen) = 0;
+	endPointTexture = platform_LoadTexture(file);
+	if (endPointTexture == NULL) {
+		platform_Log("can't load tile %s from file %s\n", name, file);
 	}
 }
 
@@ -294,6 +306,8 @@ loadLevel(char *file)
 
 	level.regions = ecalloc(block.directives_len, sizeof(struct Region));
 	level.regions_len = 0;
+	level.end.x = -1;
+	level.end.y = -1;
 	level.stage_length = MAX_STAGE_LENGTH;
 	for (size_t i = 0; i < block.directives_len; ++i) {
 		if (strcmp(block.directives[i].name, "stage_length") == 0) {
@@ -308,6 +322,19 @@ loadLevel(char *file)
 				level.stage_length = MAX_STAGE_LENGTH;
 			else
 				level.stage_length *= BLOCK_SIZE;
+			continue;
+		} else if (strcmp(block.directives[i].name, "end") == 0) {
+			if (block.directives[i].params_len != 2) {
+				platform_Log("%s:%d Expected 2 field for end got %d\n",
+						file,
+						block.directives[i].lineno,
+						(int)block.directives[i].params_len);
+			}
+			level.end.x = atoi(block.directives[i].params[0]) * BLOCK_SIZE;
+			level.end.y = atoi(block.directives[i].params[1]) * BLOCK_SIZE;
+			continue;
+		} else if (strcmp(block.directives[i].name, "enemy") == 0) {
+			// TODO:
 			continue;
 		}
 
@@ -344,6 +371,11 @@ loadLevel(char *file)
 		};
 		level.regions_len++;
 	}
+
+	if (level.end.x < 0 || level.end.y < 0) {
+		// XXX: what should we do in this case?
+	}
+
 	stage_length = level.stage_length;
 	if (level.regions_len == 0) {
 		platform_Log("Unable to read any data from file %s\n", file);
@@ -652,12 +684,7 @@ playerVerticalCollision(int i)
 		}
 	}
 
-
 	if (reg != NULL) {
-		if (reg->t == endPointTexture) {
-			game.state = STATE_WON;
-			return player[i].y;
-		}
 		player[i].dy = 0;
 		if (dy > 0) { /* Player hit a platform while falling */
 			player[i].inAir = false;
@@ -719,11 +746,6 @@ playerHorizontalCollision(int i)
 		// initial and final postition of player and choose the
 		// platform that's closest to the initial position of player.
 		if (game_HasIntersectionF(p, r)) {
-			if (level->regions[j].t == endPointTexture) {
-				game.state = STATE_WON;
-				return player[i].x;
-			}
-
 			if (dx > 0) { /* Player is going right */
 				player[i].dx = 0;
 				return r.x - player[i].w;
@@ -891,6 +913,25 @@ movePlayers(float dt)
 {
 	/* TODO: Player-Player collision */
 	for (int i = 0; i <= game.numplayers; i++) {
+		struct Level *level = &game.levels[game.curLevel];
+		struct game_FRect p = {
+			(float)player[i].x,
+			(float)player[i].y,
+			(float)player[i].w,
+			(float)player[i].h
+		};
+		struct game_FRect end = {
+			.x = (float)level->end.x,
+			.y = (float)level->end.y,
+			.w = (float)1 * BLOCK_SIZE,
+			.h = (float)1 * BLOCK_SIZE,
+		};
+		if (game_HasIntersectionF(p, end)) {
+			game.state = STATE_WON;
+			return;
+		}
+
+
 		movePlayerVertical(i, dt);
 		movePlayerHorizontal(i, dt);
 		movePlayerProjectile(i, dt);
@@ -1064,6 +1105,18 @@ drwPlatforms(void)
 
 			drawPlatform(level->regions[i].t, r, dst);
 		}
+	}
+
+	for (int j = 0; j <= game.numplayers; j++) {
+		double *cam_y = &game.screens[j].cam_y;
+		double *cam_x = &game.screens[j].cam_x;
+		struct game_Rect dst = {
+			.x = level->end.x - *cam_x,
+			.y = level->end.y - *cam_y,
+			.w = BLOCK_SIZE,
+			.h = BLOCK_SIZE,
+		};
+		platform_DrawTexture(endPointTexture, NULL, &dst);
 	}
 }
 
