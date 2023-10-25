@@ -1,4 +1,3 @@
-.POSIX:
 include config.mk
 
 CFLAGS_sdl = `pkg-config --cflags SDL2_ttf SDL2_image sdl2`
