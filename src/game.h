@@ -89,6 +89,8 @@ void game_Init(void);
 bool game_UpdateAndDraw(double dt, struct game_Input input, int width, int height);
 void game_Quit(void);
 
+void platform_Clip(struct game_Rect r);
+void platform_ResetClip(void);
 void platform_DrawTrail(int x1, int y1, int x2, int y2, int size, struct game_Color color);
 game_Texture *platform_LoadTexture(char *file);
 void platform_DestroyTexture(game_Texture *t);

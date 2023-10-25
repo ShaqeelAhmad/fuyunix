@@ -90,6 +90,21 @@ struct Wayland wayland;
 #define CAIRO_RGBA(c) (c.r / 255.0), (c.g / 255.0), (c.b / 255.0), (c.a / 255.0)
 
 void
+platform_Clip(struct game_Rect r)
+{
+	cairo_t *cr = wayland.buffer.cr;
+	cairo_rectangle(cr, r.x, r.y, r.w, r.h);
+	cairo_clip(cr);
+}
+
+void
+platform_ResetClip(void)
+{
+	cairo_t *cr = wayland.buffer.cr;
+	cairo_reset_clip(cr);
+}
+
+void
 platform_DrawTrail(int x1, int y1, int x2, int y2, int size, struct game_Color color)
 {
 	cairo_t *cr = wayland.buffer.cr;

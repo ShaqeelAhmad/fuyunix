@@ -53,6 +53,24 @@ nullDie(void *p)
 }
 
 void
+platform_Clip(struct game_Rect r)
+{
+	SDL_Rect rect = {
+		.x = r.x,
+		.y = r.y,
+		.w = r.w,
+		.h = r.h,
+	};
+	SDL_RenderSetClipRect(renderer, &rect);
+}
+
+void
+platform_ResetClip(void)
+{
+	SDL_RenderSetClipRect(renderer, NULL);
+}
+
+void
 platform_DrawTrail(int x1, int y1, int x2, int y2, int size, struct game_Color c)
 {
 	// TODO: implement draw trail for sdl
@@ -183,6 +201,7 @@ platform_DrawTexture(game_Texture *t, struct game_Rect *src, struct game_Rect *d
 		fprintf(stderr, "%s\n", SDL_GetError());
 	}
 }
+
 void
 platform_Clear(struct game_Color c)
 {
@@ -190,11 +209,12 @@ platform_Clear(struct game_Color c)
 	SDL_RenderClear(renderer);
 
 }
+
 void
 platform_DrawLine(struct game_Color c, int x1, int y1, int x2, int y2)
 {
 	SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
-	SDL_RenderDrawLine(renderer, x1, y2, x2, y2);
+	SDL_RenderDrawLine(renderer, x1, y1, x2, y2);
 }
 
 static void

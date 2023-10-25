@@ -137,7 +137,7 @@ enum Tile {
 };
 
 static struct TileTexture tileTextures[] = {
-	[TILE_SNOW] = {"snow"},
+	[TILE_SNOW] = {"snow", NULL},
 };
 
 static game_Texture *endPointTexture = NULL;
@@ -1024,14 +1024,24 @@ drwPlayers(void)
 		double y = game.screens[j].y;
 		double w = game.screens[j].w;
 		double h = game.screens[j].h;
-		for (int i = 0; i <= game.numplayers; i++) {
-			if (i == j) {
-				continue;
+
+		struct game_Rect clip = {
+			game.screens[j].x,
+			game.screens[j].y,
+			game.screens[j].w,
+			game.screens[j].h,
+		};
+
+		platform_Clip(clip);
+			for (int i = 0; i <= game.numplayers; i++) {
+				if (i == j) {
+					continue;
+				}
+				drawPlayer(i, x, y, w, h, cam_x, cam_y);
 			}
-			drawPlayer(i, x, y, w, h, cam_x, cam_y);
-		}
-		// TODO: change the camera so player can always be seen.
-		drawPlayer(j, x, y, w, h, cam_x, cam_y);
+			// TODO: change the camera so the player can always be seen.
+			drawPlayer(j, x, y, w, h, cam_x, cam_y);
+		platform_ResetClip();
 	}
 }
 
@@ -1066,7 +1076,6 @@ drawPlatform(game_Texture *t, struct game_Rect rect, struct game_Rect screen)
 				d.x = screen.x;
 			}
 
-			// TODO: this isn't quite it, but good enough for now.
 			struct game_Rect s = {
 				.x = 0,
 				.y = 0,
@@ -1079,44 +1088,68 @@ drawPlatform(game_Texture *t, struct game_Rect rect, struct game_Rect screen)
 }
 
 static void
+drwTiles(int j, struct Level *level)
+{
+	double cam_y = game.screens[j].cam_y;
+	double cam_x = game.screens[j].cam_x;
+	for (size_t i = 0; i < level->regions_len; i++) {
+		struct game_Rect r = {
+			.x = level->regions[i].rect.x - cam_x,
+			.y = level->regions[i].rect.y - cam_y,
+			.w = level->regions[i].rect.w,
+			.h = level->regions[i].rect.h,
+		};
+		struct game_Rect dst = {
+			.x = game.screens[j].x,
+			.y = game.screens[j].y,
+			.w = game.screens[j].w,
+			.h = game.screens[j].h,
+		};
+
+		if (r.x > game.screens[j].w || r.y > game.screens[j].h) {
+			continue;
+		}
+
+		drawPlatform(level->regions[i].t, r, dst);
+	}
+
+	double x = game.screens[j].x;
+	double y = game.screens[j].y;
+	double w = game.screens[j].w;
+	double h = game.screens[j].h;
+	double lx = x + level->end.x - cam_x;
+	double ly = y + level->end.y - cam_y;
+	if (lx > x + w || lx < x) {
+		return;
+	}
+	if (ly > y + h || ly < y) {
+		return;
+	}
+	struct game_Rect dst = {
+		.x = lx,
+		.y = ly,
+		.w = BLOCK_SIZE,
+		.h = BLOCK_SIZE,
+	};
+
+	platform_DrawTexture(endPointTexture, NULL, &dst);
+}
+
+static void
 drwPlatforms(void)
 {
 	struct Level *level = &game.levels[game.curLevel];
-	for (size_t i = 0; i < level->regions_len; i++) {
-		for (int j = 0; j <= game.numplayers; j++) {
-			double *cam_y = &game.screens[j].cam_y;
-			double *cam_x = &game.screens[j].cam_x;
-			struct game_Rect r = {
-				.x = level->regions[i].rect.x - *cam_x,
-				.y = level->regions[i].rect.y - *cam_y,
-				.w = level->regions[i].rect.w,
-				.h = level->regions[i].rect.h,
-			};
-			struct game_Rect dst = {
-				.x = game.screens[j].x,
-				.y = game.screens[j].y,
-				.w = game.screens[j].w,
-				.h = game.screens[j].h,
-			};
-
-			if (r.x > game.screens[j].w || r.y > game.screens[j].h) {
-				continue;
-			}
-
-			drawPlatform(level->regions[i].t, r, dst);
-		}
-	}
-
-	for (int j = 0; j <= game.numplayers; j++) {
-		double *cam_y = &game.screens[j].cam_y;
-		double *cam_x = &game.screens[j].cam_x;
-		struct game_Rect dst = {
-			.x = level->end.x - *cam_x,
-			.y = level->end.y - *cam_y,
-			.w = BLOCK_SIZE,
-			.h = BLOCK_SIZE,
+	for (int i = 0; i <= game.numplayers; i++) {
+		struct game_Rect clip = {
+			game.screens[i].x,
+			game.screens[i].y,
+			game.screens[i].w,
+			game.screens[i].h,
 		};
-		platform_DrawTexture(endPointTexture, NULL, &dst);
+
+		platform_Clip(clip);
+		drwTiles(i, level);
+		platform_ResetClip();
 	}
 }
 
@@ -1128,7 +1161,7 @@ drw(void)
 
 	platform_Clear(GAME_RGB(0, 0, 0));
 	switch (game.state) {
-	case STATE_MENU:;
+	case STATE_MENU: {
 		int gaps = game.h / 100;
 		int sectionSize = game.h / 4;
 		int sectionHeight = sectionSize - gaps * 2;
@@ -1160,8 +1193,8 @@ drw(void)
 
 		drwHomeMenu(gaps, game.menuFocus,
 					sectionSize, sectionWidth, sectionHeight);
-		break;
-	case STATE_PLAY:
+	} break;
+	case STATE_PLAY: {
 		/* Change background to color: "#114261" */
 		platform_FillRect(GAME_RGB(0x11, 0x41, 0x61), NULL);
 
@@ -1174,13 +1207,12 @@ drw(void)
 			platform_DrawLine(GAME_BLACK, game.screens[0].w, game.screens[0].h,
 					game.screens[1].x, game.screens[1].y);
 		}
-		break;
+	} break;
 	case STATE_WON: {
 		// TODO: menu or at least keys to restart the level or go back
 		// to main menu
 		drwTextScreenCentered("You won", 40);
-		break;
-	}
+	} break;
 	case STATE_DEAD: {
 		// TODO: menu or at least keys to restart the level or go back
 		// to main menu
@@ -1200,9 +1232,8 @@ drw(void)
 		if (death_alpha > 255)
 			death_alpha = 255;
 
-		break;
-	}
-	case STATE_PAUSE:
+	} break;
+	case STATE_PAUSE: {
 		platform_FillRect(GAME_RGB(0x11, 0x41, 0x61), NULL);
 
 		drwPlatforms();
@@ -1218,7 +1249,7 @@ drw(void)
 		platform_FillRect(GAME_RGB(0x11, 0x11, 0x11), &r);
 		r.x = game.w / 2 + BLOCK_SIZE;
 		platform_FillRect(GAME_RGB(0x11, 0x11, 0x11), &r);
-		break;
+	} break;
 	}
 }
 
