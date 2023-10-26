@@ -174,7 +174,7 @@ platform_RenderText(char *text, int size, struct game_Color fg, int x, int y)
 	cairo_t *cr = wayland.buffer.cr;
 	cairo_save(cr);
 	cairo_set_font_size(cr, (double)size);
-	cairo_move_to(cr, x, y);
+	cairo_move_to(cr, x, y + size/2);
 	cairo_set_source_rgba(cr, CAIRO_RGBA(fg));
 	cairo_show_text(cr, text);
 	cairo_restore(cr);

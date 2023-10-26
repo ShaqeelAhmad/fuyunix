@@ -20,7 +20,7 @@ all: fuyunix man
 
 clean:
 	rm -f fuyunix.6
-	rm -f fuyunix
+	rm -f fuyunix fuyunix.exe
 	rm -f $(WL_SRC) $(WL_HDR)
 
 man: fuyunix.6

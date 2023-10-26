@@ -17,6 +17,7 @@
  *  along with fuyunix.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <assert.h>
 #include <limits.h>
 #include <math.h>
 #include <stdbool.h>
@@ -24,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <dirent.h>
+#include <unistd.h>
 
 #include "game.h"
 #include "util.h"
@@ -50,7 +52,7 @@ struct Level {
 
 enum GameState {
 	STATE_MENU,
-	// TODO: level selection state.
+	STATE_LEVEL_SELECT,
 	STATE_PLAY,
 	STATE_PAUSE,
 	STATE_DEAD,
@@ -391,36 +393,34 @@ loadLevels(void)
 {
 	struct Level *levels = NULL;
 	int levels_len = 0;
-
-	// TODO: Allow loading levels from $XDG_DATA_HOME
-	char *levelDir = GAME_DATA_DIR"/levels/";
-
-	DIR *d = opendir(levelDir);
-	if (d == NULL) {
-		platform_Log("can't open directory %s\n", levelDir);
-		return;
-	}
-	struct dirent *f = NULL;
 	char path[PATH_MAX];
-	int levelDirLen = strlen(levelDir);
+
+	char *levelDir = GAME_DATA_DIR"/levels/";
+	size_t levelDirLen = strlen(levelDir);
 	memcpy(path, levelDir, levelDirLen);
-	while ((f = readdir(d)) != NULL) {
-		if (strcmp(f->d_name, ".") == 0 || strcmp(f->d_name, "..") == 0) {
-			continue;
+
+	// arbitrary limit of 400
+	for (int i = 1; i < 400; i++) {
+		size_t path_len = sizeof(path) - levelDirLen;
+		int n = snprintf(path+levelDirLen, path_len, "%d", i);
+		if (n < 0 || (size_t)n >= path_len) {
+			perror("snprintf");
 		}
-		int len = strlen(f->d_name);
-		memcpy(path+levelDirLen, f->d_name, len);
-		*(path+levelDirLen+len) = 0;
+
+		if (access(path, R_OK) < 0) {
+			break;
+		}
+
 		struct Level l = loadLevel(path);
 		if (l.regions == NULL || l.regions_len == 0) {
-			continue;
+			break;
 		}
+
 
 		levels_len++;
 		levels = erealloc(levels, levels_len * sizeof(*levels));
 		levels[levels_len-1] = l;
 	}
-	closedir(d);
 
 	game.levels = levels;
 	game.levels_len = levels_len;
@@ -1174,7 +1174,7 @@ drw(void)
 		if (game.focusSelect) {
 			switch (game.menuFocus) {
 			case 0:
-				game.state = STATE_PLAY;
+				game.state = STATE_LEVEL_SELECT;
 				freePlayerTextures();
 				loadPlayerTextures();
 				break;
@@ -1193,6 +1193,50 @@ drw(void)
 
 		drwHomeMenu(gaps, game.menuFocus,
 					sectionSize, sectionWidth, sectionHeight);
+	} break;
+	case STATE_LEVEL_SELECT: {
+		int padding = 10;
+		int box_w = game.w * 0.3;
+		int box_h = game.h * 0.4;
+		int inner_box_w = box_w - padding;
+		int inner_box_h = box_h - padding;
+
+		double n = game.w / (box_w + padding);
+		double w = game.w / n;
+
+		int i = game.curLevel - 1;
+		for (int j = 0; j < n; j++, i++) {
+			if (i >= game.levels_len) {
+				break;
+			}
+			if (i < 0) {
+				continue;
+			}
+
+			double x = (double)j * w;
+			char buf[16];
+			snprintf(buf, sizeof(buf), "%d", i+1);
+
+			struct game_Rect rect = {
+				.x = x + padding,
+				.y = game.h/2 - box_h/2,
+				.w = box_w,
+				.h = box_h,
+			};
+			if (game.curLevel == i) {
+				platform_FillRect(GAME_RGB(0x44, 0x55, 0xBB), &rect);
+			} else {
+				platform_FillRect(GAME_RGB(0x11, 0x11, 0x66), &rect);
+			}
+			rect = (struct game_Rect){
+				.x = rect.x + padding/2,
+				.y = game.h/2 - inner_box_h/2,
+				.w = inner_box_w,
+				.h = inner_box_h,
+			};
+			platform_FillRect(GAME_RGB(0x01, 0x12, 0x44), &rect);
+			drwText(buf, x + box_w/2, game.h/2, 40);
+		}
 	} break;
 	case STATE_PLAY: {
 		/* Change background to color: "#114261" */
@@ -1285,10 +1329,27 @@ handleKey(int sym)
 			break;
 		};
 		break;
-	case STATE_WON:
-		/* FALLTHROUGH */
-	case STATE_DEAD:
-		/* FALLTHROUGH */
+	case STATE_LEVEL_SELECT:
+		switch (sym) {
+		case KEY_LEFT:
+			if (game.curLevel > 0) {
+				game.curLevel--;
+			}
+			break;
+		case KEY_RIGHT:
+			if (game.curLevel < game.levels_len-1) {
+				game.curLevel++;
+			}
+			break;
+		case KEY_SELECT:
+			game.state = STATE_PLAY;
+			break;
+		case KEY_QUIT:
+			game.state = STATE_MENU;
+		}
+		break;
+	case STATE_WON:  /* FALLTHROUGH */
+	case STATE_DEAD: /* FALLTHROUGH */
 	case STATE_PAUSE:
 		switch (sym) {
 		case KEY_UP:
@@ -1321,9 +1382,10 @@ static void
 handleKeyRelease(int sym, int player)
 {
 	switch (game.state) {
-	case STATE_WON:  /* FALLTHROUGH */
-	case STATE_DEAD: /* FALLTHROUGH */
-	case STATE_MENU: /* FALLTHROUGH */
+	case STATE_LEVEL_SELECT: /* FALLTHROUGH */
+	case STATE_WON:          /* FALLTHROUGH */
+	case STATE_DEAD:         /* FALLTHROUGH */
+	case STATE_MENU:         /* FALLTHROUGH */
 	case STATE_PAUSE:
 		break;
 	case STATE_PLAY:
@@ -1347,10 +1409,12 @@ static void
 handleKeyRepeat(int sym, int player)
 {
 	switch (game.state) {
-	case STATE_WON:  /* FALLTHROUGH */
-	case STATE_DEAD: /* FALLTHROUGH */
-	case STATE_MENU: /* FALLTHROUGH */
+	case STATE_LEVEL_SELECT: /* FALLTHROUGH */
+	case STATE_WON:          /* FALLTHROUGH */
+	case STATE_DEAD:         /* FALLTHROUGH */
+	case STATE_MENU:         /* FALLTHROUGH */
 	case STATE_PAUSE:
+		// repeat keys are ignored for these states
 		break;
 	case STATE_PLAY:
 		player = player > game.numplayers ? 0 : player;
