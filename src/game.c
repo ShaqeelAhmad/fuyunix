@@ -26,11 +26,18 @@
 #include <string.h>
 #include <dirent.h>
 #include <unistd.h>
+#include <cairo.h>
+#include <ft2build.h>
+#include FT_FREETYPE_H
+#include <freetype/ftmodapi.h>
+#include <cairo-ft.h>
 
 #include "game.h"
 #include "util.h"
 #include "fuyunix.h"
 #include "scfg.h"
+
+#define CAIRO_RGBA(c) (c.r / 255.0), (c.g / 255.0), (c.b / 255.0), (c.a / 255.0)
 
 static size_t stage_height = MAX_STAGE_HEIGHT;
 static size_t stage_length = MAX_STAGE_LENGTH;
@@ -38,7 +45,7 @@ static size_t stage_length = MAX_STAGE_LENGTH;
 static bool split_screen = true;
 
 struct Region {
-	game_Texture *t;
+	cairo_surface_t *t;
 	struct game_Rect rect;
 };
 
@@ -60,8 +67,8 @@ enum GameState {
 };
 
 struct Player {
-	game_Texture *frame[FRAME_NUM];
-	game_Texture **current;
+	cairo_surface_t *frame[FRAME_NUM];
+	cairo_surface_t **current;
 
 
 	struct {
@@ -93,6 +100,11 @@ struct Player {
 };
 
 struct Game {
+	cairo_t *cr;
+	FT_Library ft_lib;
+	FT_Face    ft_face;
+	cairo_font_face_t *font_face;
+
 	enum GameState state;
 
 	bool focusSelect;
@@ -131,7 +143,7 @@ static struct Player player[MAX_PLAYERS];
 struct TileTexture {
 	char *name;
 
-	game_Texture *tile;
+	cairo_surface_t *tile;
 };
 
 enum Tile {
@@ -142,7 +154,18 @@ static struct TileTexture tileTextures[] = {
 	[TILE_SNOW] = {"snow", NULL},
 };
 
-static game_Texture *endPointTexture = NULL;
+static cairo_surface_t *endPointTexture = NULL;
+
+cairo_surface_t *
+loadCairoSurface(char *file)
+{
+	cairo_surface_t *surf =  cairo_image_surface_create_from_png(file);
+	cairo_status_t s = cairo_surface_status(surf);
+	if (s != CAIRO_STATUS_SUCCESS) {
+		return NULL;
+	}
+	return surf;
+}
 
 void
 initTileTextures(void)
@@ -159,9 +182,9 @@ initTileTextures(void)
 		memcpy(file + tileDirLen, t->name, nameLen);
 		memcpy(file + tileDirLen + nameLen, ext, extLen);
 		*(file + tileDirLen + nameLen + extLen) = 0;
-		t->tile = platform_LoadTexture(file);
+		t->tile = loadCairoSurface(file);
 		if (t->tile == NULL) {
-			platform_Log("can't load tile %s from file %s\n", t->name, file);
+			fprintf(stderr, "can't load tile %s from file %s\n", t->name, file);
 			continue;
 		}
 	}
@@ -173,13 +196,13 @@ initTileTextures(void)
 	memcpy(file + tileDirLen, name, nameLen);
 	memcpy(file + tileDirLen + nameLen, ext, extLen);
 	*(file + tileDirLen + nameLen + extLen) = 0;
-	endPointTexture = platform_LoadTexture(file);
+	endPointTexture = loadCairoSurface(file);
 	if (endPointTexture == NULL) {
-		platform_Log("can't load tile %s from file %s\n", name, file);
+		fprintf(stderr, "can't load tile %s from file %s\n", name, file);
 	}
 }
 
-game_Texture *
+cairo_surface_t *
 getTileTexture(char *s)
 {
 	for (size_t i = 0; i < sizeof(tileTextures) / sizeof(tileTextures[0]); i++) {
@@ -215,14 +238,14 @@ loadPlayerImages(int i)
 	for (int frame = 0; frame < FRAME_NUM; frame++) {
 		formatPath(path, userDir, i, frame);
 
-		player[i].frame[frame] = platform_LoadTexture(path);
+		player[i].frame[frame] = loadCairoSurface(path);
 
 		if (player[i].frame[frame] == NULL) {
 			formatPath(path, GAME_DATA_DIR, i, frame);
-			player[i].frame[frame] = platform_LoadTexture(path);
+			player[i].frame[frame] = loadCairoSurface(path);
 
 			if (player[i].frame[frame] == NULL) {
-				platform_Log("Unable to load image texture: %s\n", path);
+				fprintf(stderr, "Unable to load image texture: %s\n", path);
 			}
 		}
 	}
@@ -290,7 +313,7 @@ freePlayerTextures(void)
 	for (int i = 0; i < MAX_PLAYERS; i++) {
 		for (int frame = 0; frame < FRAME_NUM; frame++) {
 			if (player[i].frame[frame])
-				platform_DestroyTexture(player[i].frame[frame]);
+				cairo_surface_destroy(player[i].frame[frame]);
 			player[i].frame[frame] = NULL;
 		}
 	}
@@ -302,7 +325,7 @@ loadLevel(char *file)
 	struct Level level = {0};
 	struct scfg_block block;
 	if (scfg_load_file(&block, file) < 0) {
-		platform_Log("Failed to load file %s\n", file);
+		fprintf(stderr, "Failed to load file %s\n", file);
 		return level;
 	}
 
@@ -314,7 +337,7 @@ loadLevel(char *file)
 	for (size_t i = 0; i < block.directives_len; ++i) {
 		if (strcmp(block.directives[i].name, "stage_length") == 0) {
 			if (block.directives[i].params_len != 1) {
-				platform_Log("%s:%d Expected 1 field for stage_length got %d\n",
+				fprintf(stderr, "%s:%d Expected 1 field for stage_length got %d\n",
 						file,
 						block.directives[i].lineno,
 						(int)block.directives[i].params_len);
@@ -327,7 +350,7 @@ loadLevel(char *file)
 			continue;
 		} else if (strcmp(block.directives[i].name, "end") == 0) {
 			if (block.directives[i].params_len != 2) {
-				platform_Log("%s:%d Expected 2 field for end got %d\n",
+				fprintf(stderr, "%s:%d Expected 2 field for end got %d\n",
 						file,
 						block.directives[i].lineno,
 						(int)block.directives[i].params_len);
@@ -341,16 +364,16 @@ loadLevel(char *file)
 		}
 
 		if (block.directives[i].params_len != 4) {
-			platform_Log("%s:%d Expected 5 fields got %d\n",
+			fprintf(stderr, "%s:%d Expected 5 fields got %d\n",
 				file,
 				block.directives[i].lineno,
 				(int)block.directives[i].params_len);
 			continue;
 		};
 
-		game_Texture *t = getTileTexture(block.directives[i].name);
+		cairo_surface_t *t = getTileTexture(block.directives[i].name);
 		if (t == NULL) {
-			platform_Log("%s:%d: unknown tile %s\n", file,
+			fprintf(stderr, "%s:%d: unknown tile %s\n", file,
 					block.directives[i].lineno,
 					block.directives[i].name);
 			continue;
@@ -380,7 +403,7 @@ loadLevel(char *file)
 
 	stage_length = level.stage_length;
 	if (level.regions_len == 0) {
-		platform_Log("Unable to read any data from file %s\n", file);
+		fprintf(stderr, "Unable to read any data from file %s\n", file);
 		free(level.regions);
 	}
 	scfg_block_finish(&block);
@@ -426,11 +449,25 @@ loadLevels(void)
 	game.levels_len = levels_len;
 }
 
+bool
+readSaveData(struct game_Data *data)
+{
+	int level = readSaveFile();
+	data->level = level;
+	return true;
+}
+
+void
+writeSaveData(struct game_Data *data)
+{
+	writeSaveFile(data->level);
+}
+
 void
 game_Init(void)
 {
 	struct game_Data data = {0};
-	platform_ReadSaveData(&data);
+	readSaveData(&data);
 	game.level = data.level;
 
 	game.state = STATE_MENU;
@@ -444,9 +481,25 @@ game_Init(void)
 
 	loadLevels();
 	if (game.levels_len <= 0) {
-		platform_Log("failed to load levels\n");
+		fprintf(stderr, "failed to load levels\n");
 		exit(1);
 	}
+
+	FT_Error err = FT_Init_FreeType(&game.ft_lib);
+	if (err) {
+		fprintf(stderr, "error: failed to initalize freetype library: %s\n",
+				FT_Error_String(err));
+		exit(1);
+	}
+
+	char *font_file = GAME_DATA_DIR"/fonts/FreeSerifBoldItalic.ttf";
+	err = FT_New_Face(game.ft_lib, font_file, 0, &game.ft_face);
+	if (err) {
+		fprintf(stderr, "error: failed to load file %s: %s\n",
+				font_file, FT_Error_String(err));
+		exit(1);
+	}
+	game.font_face = cairo_ft_font_face_create_for_ft_face(game.ft_face, 0);
 }
 
 void
@@ -463,7 +516,37 @@ game_Quit(void)
 	struct game_Data data = {
 		.level = game.level,
 	};
-	platform_WriteSaveData(&data);
+	writeSaveData(&data);
+
+	cairo_font_face_destroy(game.font_face);
+	FT_Done_Face(game.ft_face);
+	FT_Done_Library(game.ft_lib);
+}
+
+static void
+renderText(char *text, int size, struct game_Color fg, int x, int y)
+{
+	cairo_t *cr = game.cr;
+	cairo_save(cr);
+	cairo_set_font_size(cr, (double)size);
+	cairo_move_to(cr, x, y + size/2);
+	cairo_set_source_rgba(cr, CAIRO_RGBA(fg));
+	cairo_show_text(cr, text);
+	cairo_restore(cr);
+}
+
+static void
+measureText(char *text, int size, int *w, int *h)
+{
+	cairo_text_extents_t ext;
+	cairo_t *cr = game.cr;
+	cairo_save(cr);
+	cairo_set_font_size(cr, (double)size);
+	cairo_text_extents(cr, text, &ext);
+	cairo_restore(cr);
+
+	if (w) *w = ext.width;
+	if (h) *h = ext.height;
 }
 
 static void
@@ -475,18 +558,31 @@ drwText(char *text, int x, int y, int size)
 		.g = 0xFF,
 		.b = 0xFF,
 	};
-	platform_RenderText(text, size, fg, x, y);
+	renderText(text, size, fg, x, y);
 }
 
 static void
 drwTextScreenCentered(char *text, int size)
 {
 	int w = 0, h = 0;
-	platform_MeasureText(text, size, &w, &h);
+	measureText(text, size, &w, &h);
 	int x = game.w / 2 - w / 2;
 	int y = game.h / 2 - h / 2;
 
 	drwText(text, x, y, size);
+}
+
+static void
+fillRect(struct game_Color c, struct game_Rect *rect)
+{
+	cairo_t *cr = game.cr;
+	cairo_set_source_rgba(cr, CAIRO_RGBA(c));
+	if (rect == NULL) {
+		cairo_rectangle(cr, 0, 0, game.w, game.h);
+	} else {
+		cairo_rectangle(cr, rect->x, rect->y, rect->w, rect->h);
+	}
+	cairo_fill(cr);
 }
 
 static void
@@ -502,9 +598,9 @@ drwHomeMenu(int gaps, int focus, int size, int width, int height)
 
 	for (size_t i = 0; i < sizeof(options) / sizeof(options[0]); i++) {
 		if ((int)i == focus) {
-			platform_FillRect(GAME_RGB(20, 190, 180), &options[i]);
+			fillRect(GAME_RGB(20, 190, 180), &options[i]);
 		} else {
-			platform_FillRect(GAME_RGB(20, 150, 180), &options[i]);
+			fillRect(GAME_RGB(20, 150, 180), &options[i]);
 		}
 	}
 
@@ -518,7 +614,7 @@ drwHomeMenu(int gaps, int focus, int size, int width, int height)
 	drwText("Start", gaps*2, offset + size, textSize);
 
 	int w = 0;
-	platform_MeasureText(nplayer, textSize, &w, NULL);
+	measureText(nplayer, textSize, &w, NULL);
 
 	drwText("Choose players", gaps*2, offset + size * 2, textSize);
 	drwText(nplayer, width - w, offset + size * 2, textSize);
@@ -942,6 +1038,57 @@ movePlayers(float dt)
 }
 
 static void
+drawTrail(int x1, int y1, int x2, int y2, int size, struct game_Color color)
+{
+	cairo_t *cr = game.cr;
+	cairo_pattern_t *pat;
+	pat = cairo_pattern_create_radial(x1, y1, size/2, x2, y2, size/2);
+
+	color.a = 0;
+	cairo_pattern_add_color_stop_rgba(pat, 1, CAIRO_RGBA(color));
+
+	color.a = 0xff;
+	cairo_pattern_add_color_stop_rgba(pat, 0, CAIRO_RGBA(color));
+
+	cairo_move_to(cr, x1, y1);
+	cairo_line_to(cr, x1, y2);
+	cairo_line_to(cr, x2, y2);
+	cairo_line_to(cr, x2, y1);
+	cairo_close_path(cr);
+
+	cairo_set_source(cr, pat);
+	cairo_fill(cr);
+	cairo_pattern_destroy(pat);
+}
+
+static void
+drawTexture(cairo_surface_t *tex, struct game_Rect *src, struct game_Rect *dst)
+{
+	cairo_t *cr = game.cr;
+	cairo_save(cr);
+
+	cairo_surface_t *t = (cairo_surface_t *)tex;
+
+	if (src != NULL) {
+		t = cairo_surface_create_for_rectangle(t,
+				src->x, src->y, src->w, src->h);
+	}
+
+	if (dst != NULL) {
+		cairo_set_source_surface(cr, t, dst->x, dst->y);
+	} else {
+		// TODO: render to entire surface
+		cairo_set_source_surface(cr, t, 0, 0);
+	}
+	cairo_paint(cr);
+	if ((cairo_surface_t *)t != (cairo_surface_t *)tex) {
+		cairo_surface_destroy(t);
+	}
+
+	cairo_restore(cr);
+}
+
+static void
 drawPlayer(int i, double x, double y, double w, double h, double cam_x, double cam_y)
 {
 	struct game_Rect playRect = {
@@ -958,12 +1105,12 @@ drawPlayer(int i, double x, double y, double w, double h, double cam_x, double c
 		return;
 	}
 
-	platform_DrawTrail(
-			playRect.x + playRect.w / 2,
-			playRect.y + playRect.h / 2,
-			x + player[i].trail.x - cam_x,
-			y + player[i].trail.y - cam_y,
-			playRect.w, player[i].trail.color);
+	drawTrail(
+		playRect.x + playRect.w / 2,
+		playRect.y + playRect.h / 2,
+		x + player[i].trail.x - cam_x,
+		y + player[i].trail.y - cam_y,
+		playRect.w, player[i].trail.color);
 
 	/* Draw a black square in place of texture that failed to load */
 	if (*player[i].current == NULL) {
@@ -974,7 +1121,7 @@ drawPlayer(int i, double x, double y, double w, double h, double cam_x, double c
 			playRect.w -= x - playRect.x;
 			playRect.x = playRect.x;
 		}
-		platform_FillRect(GAME_RGB(0, 0, 0), &playRect);
+		fillRect(GAME_RGB(0, 0, 0), &playRect);
 	} else {
 		struct game_Rect s = {
 			.x = 0,
@@ -994,7 +1141,7 @@ drawPlayer(int i, double x, double y, double w, double h, double cam_x, double c
 		s.w = s.w * p.w / playRect.w;
 		s.x = p.x - playRect.x;
 
-		platform_DrawTexture(*player[i].current, &s, &p);
+		drawTexture(*player[i].current, &s, &p);
 	}
 
 	if (player[i].proj.active &&
@@ -1010,13 +1157,14 @@ drawPlayer(int i, double x, double y, double w, double h, double cam_x, double c
 		};
 
 		// XXX: have a spinning animation?
-		platform_FillRect(GAME_RGB(0XC8, 0XD6, 0XFF), &projRect);
+		fillRect(GAME_RGB(0XC8, 0XD6, 0XFF), &projRect);
 	}
 }
 
 static void
 drwPlayers(void)
 {
+	cairo_t *cr = game.cr;
 	for (int j = 0; j <= game.numplayers; j++) {
 		double cam_y = game.screens[j].cam_y;
 		double cam_x = game.screens[j].cam_x;
@@ -1025,14 +1173,9 @@ drwPlayers(void)
 		double w = game.screens[j].w;
 		double h = game.screens[j].h;
 
-		struct game_Rect clip = {
-			game.screens[j].x,
-			game.screens[j].y,
-			game.screens[j].w,
-			game.screens[j].h,
-		};
-
-		platform_Clip(clip);
+		cairo_rectangle(cr, game.screens[j].x, game.screens[j].y,
+				game.screens[j].w, game.screens[j].h);
+		cairo_clip(cr);
 			for (int i = 0; i <= game.numplayers; i++) {
 				if (i == j) {
 					continue;
@@ -1041,12 +1184,12 @@ drwPlayers(void)
 			}
 			// TODO: change the camera so the player can always be seen.
 			drawPlayer(j, x, y, w, h, cam_x, cam_y);
-		platform_ResetClip();
+		cairo_reset_clip(cr);
 	}
 }
 
 static void
-drawPlatform(game_Texture *t, struct game_Rect rect, struct game_Rect screen)
+drawPlatform(cairo_surface_t *t, struct game_Rect rect, struct game_Rect screen)
 {
 	for (int y = rect.y; y < rect.y + rect.h; y += BLOCK_SIZE) {
 		if (y + BLOCK_SIZE < 0 || y > screen.h) {
@@ -1082,7 +1225,7 @@ drawPlatform(game_Texture *t, struct game_Rect rect, struct game_Rect screen)
 				.w = d.w,
 				.h = d.h,
 			};
-			platform_DrawTexture(t, &s, &d);
+			drawTexture(t, &s, &d);
 		}
 	}
 }
@@ -1132,25 +1275,31 @@ drwTiles(int j, struct Level *level)
 		.h = BLOCK_SIZE,
 	};
 
-	platform_DrawTexture(endPointTexture, NULL, &dst);
+	drawTexture(endPointTexture, NULL, &dst);
 }
 
 static void
 drwPlatforms(void)
 {
+	cairo_t *cr = game.cr;
 	struct Level *level = &game.levels[game.curLevel];
 	for (int i = 0; i <= game.numplayers; i++) {
-		struct game_Rect clip = {
-			game.screens[i].x,
-			game.screens[i].y,
-			game.screens[i].w,
-			game.screens[i].h,
-		};
-
-		platform_Clip(clip);
-		drwTiles(i, level);
-		platform_ResetClip();
+		cairo_rectangle(cr, game.screens[i].x, game.screens[i].y,
+				game.screens[i].w, game.screens[i].h);
+		cairo_clip(cr);
+			drwTiles(i, level);
+		cairo_reset_clip(cr);
 	}
+}
+
+static void
+drawLine(struct game_Color c, int x1, int y1, int x2, int y2)
+{
+	cairo_t *cr = game.cr;
+	cairo_set_source_rgba(cr, CAIRO_RGBA(c));
+	cairo_move_to(cr, x1, y1);
+	cairo_line_to(cr, x2, y2);
+	cairo_stroke(cr);
 }
 
 void
@@ -1159,7 +1308,10 @@ drw(void)
 	static int death_alpha = 0;
 	if (game.state != STATE_DEAD) death_alpha = 0;
 
-	platform_Clear(GAME_RGB(0, 0, 0));
+	cairo_t *cr = game.cr;
+	cairo_set_source_rgba(cr, 0, 0, 0, 1);
+	cairo_paint(cr);
+
 	switch (game.state) {
 	case STATE_MENU: {
 		int gaps = game.h / 100;
@@ -1224,9 +1376,9 @@ drw(void)
 				.h = box_h,
 			};
 			if (game.curLevel == i) {
-				platform_FillRect(GAME_RGB(0x44, 0x55, 0xBB), &rect);
+				fillRect(GAME_RGB(0x44, 0x55, 0xBB), &rect);
 			} else {
-				platform_FillRect(GAME_RGB(0x11, 0x11, 0x66), &rect);
+				fillRect(GAME_RGB(0x11, 0x11, 0x66), &rect);
 			}
 			rect = (struct game_Rect){
 				.x = rect.x + padding/2,
@@ -1234,13 +1386,13 @@ drw(void)
 				.w = inner_box_w,
 				.h = inner_box_h,
 			};
-			platform_FillRect(GAME_RGB(0x01, 0x12, 0x44), &rect);
+			fillRect(GAME_RGB(0x01, 0x12, 0x44), &rect);
 			drwText(buf, x + box_w/2, game.h/2, 40);
 		}
 	} break;
 	case STATE_PLAY: {
 		/* Change background to color: "#114261" */
-		platform_FillRect(GAME_RGB(0x11, 0x41, 0x61), NULL);
+		fillRect(GAME_RGB(0x11, 0x41, 0x61), NULL);
 
 		movePlayers(game.dt);
 
@@ -1248,7 +1400,7 @@ drw(void)
 		drwPlayers();
 
 		if (game.numplayers > 0 && split_screen) {
-			platform_DrawLine(GAME_BLACK, game.screens[0].w, game.screens[0].h,
+			drawLine(GAME_BLACK, game.screens[0].w, game.screens[0].h,
 					game.screens[1].x, game.screens[1].y);
 		}
 	} break;
@@ -1261,11 +1413,11 @@ drw(void)
 		// TODO: menu or at least keys to restart the level or go back
 		// to main menu
 		if (death_alpha < 255) {
-			platform_FillRect(GAME_RGB(0x11, 0x41, 0x61), NULL);
+			fillRect(GAME_RGB(0x11, 0x41, 0x61), NULL);
 			drwPlatforms();
 			drwPlayers();
 
-			platform_FillRect(GAME_RGBA(0, 0, 0, death_alpha), NULL);
+			fillRect(GAME_RGBA(0, 0, 0, death_alpha), NULL);
 		}
 
 		drwTextScreenCentered("You died", 40);
@@ -1278,7 +1430,7 @@ drw(void)
 
 	} break;
 	case STATE_PAUSE: {
-		platform_FillRect(GAME_RGB(0x11, 0x41, 0x61), NULL);
+		fillRect(GAME_RGB(0x11, 0x41, 0x61), NULL);
 
 		drwPlatforms();
 		drwPlayers();
@@ -1290,9 +1442,9 @@ drw(void)
 			.w = BLOCK_SIZE,
 			.h = BLOCK_SIZE*4,
 		};
-		platform_FillRect(GAME_RGB(0x11, 0x11, 0x11), &r);
+		fillRect(GAME_RGB(0x11, 0x11, 0x11), &r);
 		r.x = game.w / 2 + BLOCK_SIZE;
-		platform_FillRect(GAME_RGB(0x11, 0x11, 0x11), &r);
+		fillRect(GAME_RGB(0x11, 0x11, 0x11), &r);
 	} break;
 	}
 }
@@ -1477,8 +1629,11 @@ game_Update(struct game_Input input, double dt, int width, int height)
 }
 
 bool
-game_UpdateAndDraw(double dt, struct game_Input input, int width, int height)
+game_UpdateAndDraw(cairo_t *cr, double dt, struct game_Input input, int width, int height)
 {
+	game.cr = cr;
+	cairo_set_font_face(cr, game.font_face);
+
 	resize_screens(width, height);
 
 	game_Update(input, dt, width, height);

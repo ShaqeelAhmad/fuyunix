@@ -18,20 +18,20 @@
  */
 
 #include <assert.h>
+#include <cairo.h>
 #include <SDL.h>
-#include <SDL_image.h>
-#include <SDL_ttf.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <limits.h>
 #include <unistd.h>
 
-#include "game.h"
 #include "fuyunix.h"
+#include "game.h"
 #include "scfg.h"
+#include "util.h"
 
-static SDL_Window   *window;
+static SDL_Window *window;
 static SDL_Renderer *renderer;
-static TTF_Font     *font;
 
 static void
 negativeDie(int x)
@@ -52,171 +52,6 @@ nullDie(void *p)
 	return p;
 }
 
-void
-platform_Clip(struct game_Rect r)
-{
-	SDL_Rect rect = {
-		.x = r.x,
-		.y = r.y,
-		.w = r.w,
-		.h = r.h,
-	};
-	SDL_RenderSetClipRect(renderer, &rect);
-}
-
-void
-platform_ResetClip(void)
-{
-	SDL_RenderSetClipRect(renderer, NULL);
-}
-
-void
-platform_DrawTrail(int x1, int y1, int x2, int y2, int size, struct game_Color c)
-{
-	// TODO: implement draw trail for sdl
-	//SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
-	//SDL_RenderDrawLine(renderer, x1, y1, x1, y2);
-	//SDL_RenderDrawLine(renderer, x1, y2, x2, y2);
-	//SDL_RenderDrawLine(renderer, x2, y2, x2, y1);
-	//SDL_RenderDrawLine(renderer, x2, y1, x1, y1);
-}
-
-void
-platform_Log(char *fmt, ...)
-{
-	va_list ap;
-	va_start(ap, fmt);
-	SDL_LogMessageV(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_VERBOSE, fmt, ap);
-	va_end(ap);
-}
-
-bool
-platform_ReadSaveData(struct game_Data *data)
-{
-	int level = readSaveFile();
-	data->level = level;
-	return true;
-}
-
-void
-platform_WriteSaveData(struct game_Data *data)
-{
-	writeSaveFile(data->level);
-}
-
-game_Texture *
-platform_LoadTexture(char *file)
-{
-	return (game_Texture*)IMG_LoadTexture(renderer, file);
-}
-
-void
-platform_DestroyTexture(game_Texture *t)
-{
-	SDL_DestroyTexture((SDL_Texture*)t);
-}
-
-void
-platform_RenderText(char *text, int size, struct game_Color fg, int x, int y)
-{
-	TTF_SetFontSize(font, size);
-	SDL_Color c = {
-		.r = fg.r,
-		.g = fg.g,
-		.b = fg.b,
-		.a = fg.a,
-	};
-	SDL_Surface *s = TTF_RenderUTF8_Solid(font, text, c);
-	if (s == NULL) {
-		fprintf(stderr, "SDL_TTF: TTF_RenderUTF8_Solid: %s\n", TTF_GetError());
-		exit(1);
-	}
-	SDL_Texture *t = nullDie(SDL_CreateTextureFromSurface(renderer, s));
-
-	SDL_Rect dest = {
-		.x = x,
-		.y = y,
-		.w = s->w,
-		.h = s->h,
-	};
-	SDL_RenderCopy(renderer, t, NULL, &dest);
-
-	SDL_DestroyTexture(t);
-	SDL_FreeSurface(s);
-}
-
-void
-platform_MeasureText(char *text, int size, int *w, int *h)
-{
-	TTF_SetFontSize(font, size);
-	if (TTF_SizeUTF8(font, text, w, h) < 0) {
-		fprintf(stderr, "SDL_TTF: TTF_SizeUTF8: %s\n", TTF_GetError());
-		exit(1);
-	}
-}
-
-void
-platform_FillRect(struct game_Color c, struct game_Rect *rect)
-{
-	SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
-	if (rect == NULL) {
-		SDL_RenderFillRect(renderer, NULL);
-	} else {
-		SDL_Rect r = {
-			.x = rect->x,
-			.y = rect->y,
-			.w = rect->w,
-			.h = rect->h,
-		};
-		SDL_RenderFillRect(renderer, &r);
-	}
-}
-
-void
-platform_DrawTexture(game_Texture *t, struct game_Rect *src, struct game_Rect *dst)
-{
-	SDL_Rect *s = NULL;
-	SDL_Rect *d = NULL;
-	SDL_Rect sValue;
-	SDL_Rect dValue;
-	if (src != NULL) {
-		sValue = (SDL_Rect){
-			.x = src->x,
-			.y = src->y,
-			.w = src->w,
-			.h = src->h,
-		};
-		s = &sValue;
-	}
-	if (dst != NULL) {
-		dValue = (SDL_Rect){
-			.x = dst->x,
-			.y = dst->y,
-			.w = dst->w,
-			.h = dst->h,
-		};
-		d = &dValue;
-	}
-	if (SDL_RenderCopy(renderer, (SDL_Texture*)t, s, d) < 0) {
-		fprintf(stderr, "%s\n", SDL_GetError());
-	}
-}
-
-void
-platform_Clear(struct game_Color c)
-{
-	SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
-	SDL_RenderClear(renderer);
-
-}
-
-void
-platform_DrawLine(struct game_Color c, int x1, int y1, int x2, int y2)
-{
-	SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
-	SDL_RenderDrawLine(renderer, x1, y1, x2, y2);
-}
-
 static void
 platform_Init(int flags)
 {
@@ -228,35 +63,12 @@ platform_Init(int flags)
 	renderer = nullDie(SDL_CreateRenderer(window, -1,
 				SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC));
 
-	if (TTF_Init() < 0){
-		fprintf(stderr, "SDL_TTF: TTF_Init: %s\n", TTF_GetError());
-		exit(1);
-	}
-	char *file = GAME_DATA_DIR"/fonts/FreeSerifBoldItalic.ttf";
-	font = TTF_OpenFont(file, 32);
-	if (font == NULL) {
-		fprintf(stderr, "SDL_TTF: TTF_OpenFont for file %s: %s\n",
-				file, TTF_GetError());
-		exit(1);
-	}
-
-
-	if (IMG_Init(IMG_INIT_PNG) != IMG_INIT_PNG) {
-		fprintf(stderr, "IMG_Init: %s\n", IMG_GetError());
-		exit(1);
-	}
-
 	SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 }
 
 static void
 platform_Quit(void)
 {
-	TTF_CloseFont(font);
-	TTF_Quit();
-
-	IMG_Quit();
-
 	SDL_DestroyRenderer(renderer);
 	SDL_DestroyWindow(window);
 	SDL_Quit();
@@ -274,7 +86,7 @@ static struct {
 	int is_key_allocated;
 } keys;
 
-static_assert(KEY_COUNT == 8, "Update keyList");
+_Static_assert(KEY_COUNT == 8, "Update keyList");
 
 static char *keysList[] = {
 	[KEY_UP]     = "up",
@@ -466,10 +278,55 @@ run(void)
 		t = nt;
 		int width, height;
 		SDL_GetWindowSize(window, &width, &height);
-		if (!game_UpdateAndDraw(dt, input, width, height)) {
+
+		static int prevWidth = 0, prevHeight = 0;
+		static cairo_surface_t *csurf = NULL;
+		static cairo_t *cr = NULL;
+		static void *framebuffer = NULL;
+
+		if (prevWidth != width || prevHeight != height) {
+			prevWidth = width;
+			prevHeight = height;
+
+			if (csurf != NULL) {
+				cairo_surface_finish(csurf);
+				cairo_surface_destroy(csurf);
+			}
+			if (cr != NULL) {
+				cairo_destroy(cr);
+			}
+
+			framebuffer = erealloc(framebuffer, width * height * 32);
+			csurf = cairo_image_surface_create_for_data(
+					(unsigned char *)framebuffer, CAIRO_FORMAT_ARGB32,
+					width, height, width*4);
+			if (cairo_surface_status(csurf) != CAIRO_STATUS_SUCCESS) {
+				fprintf(stderr, "cairo: %s\n",
+						cairo_status_to_string(cairo_surface_status(csurf)));
+				exit(1);
+			}
+			cr = cairo_create(csurf);
+			if (cairo_status(cr) != CAIRO_STATUS_SUCCESS) {
+				fprintf(stderr, "cairo: %s\n",
+						cairo_status_to_string(cairo_status(cr)));
+				exit(1);
+			}
+		}
+
+		if (!game_UpdateAndDraw(cr, dt, input, width, height)) {
 			return;
 		}
+		cairo_surface_flush(csurf);
+		SDL_Surface *surf =
+			nullDie(SDL_CreateRGBSurfaceFrom(framebuffer, width,
+						height, 32, width * 4,
+						0x00FF0000,  0x0000FF00,
+						0x000000FF, 0xFF000000));
+		SDL_Texture *texture = nullDie(SDL_CreateTextureFromSurface(renderer, surf));
+		SDL_RenderCopy(renderer, texture, NULL, NULL);
 		SDL_RenderPresent(renderer);
+		SDL_DestroyTexture(texture);
+		SDL_FreeSurface(surf);
 
 		for (int player = 0; player < 2; player++) {
 			for (int i = 0; i < KEY_COUNT; i++) {

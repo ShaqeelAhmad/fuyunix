@@ -71,8 +71,6 @@ struct game_FRect {
 	float x, y, w, h;
 };
 
-typedef struct game_Texture game_Texture;
-
 struct game_Color {
 	uint8_t r, g, b, a;
 };
@@ -86,27 +84,7 @@ struct game_Data {
 #define GAME_BLACK (struct game_Color){0, 0, 0, 0xFF}
 
 void game_Init(void);
-bool game_UpdateAndDraw(double dt, struct game_Input input, int width, int height);
+bool game_UpdateAndDraw(cairo_t *cr, double dt, struct game_Input input, int width, int height);
 void game_Quit(void);
-
-void platform_Clip(struct game_Rect r);
-void platform_ResetClip(void);
-void platform_DrawTrail(int x1, int y1, int x2, int y2, int size, struct game_Color color);
-game_Texture *platform_LoadTexture(char *file);
-void platform_DestroyTexture(game_Texture *t);
-void platform_RenderText(char *text, int size, struct game_Color fg, int x, int y);
-void platform_MeasureText(char *text, int size, int *w, int *h);
-void platform_FillRect(struct game_Color c, struct game_Rect *rect);
-void platform_DrawTexture(game_Texture *t, struct game_Rect *src, struct game_Rect *dst);
-void platform_Clear(struct game_Color c);
-void platform_DrawLine(struct game_Color c, int x1, int y1, int x2, int y2);
-bool platform_ReadSaveData(struct game_Data *data);
-void platform_WriteSaveData(struct game_Data *data);
-// XXX: have different levels of logging? e.g error, warning, debug.
-#if defined(__GNUC__)
-void __attribute__((format (printf, 1, 2))) platform_Log(char *fmt, ...);
-#else
-void platform_Log(char *fmt, ...);
-#endif
 
 #endif /* _GAME_H_ */

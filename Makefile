@@ -1,7 +1,7 @@
 include config.mk
 
-CFLAGS_sdl = `pkg-config --cflags SDL2_ttf SDL2_image sdl2`
-LDFLAGS_sdl = `pkg-config --libs SDL2_ttf SDL2_image sdl2` -lm
+CFLAGS_sdl = `pkg-config --cflags sdl2 cairo freetype2`
+LDFLAGS_sdl = `pkg-config --libs sdl2 cairo freetype2` -lm
 
 CFLAGS_wayland = `pkg-config --cflags wayland-client wayland-cursor xkbcommon cairo freetype2`
 LDFLAGS_wayland = `pkg-config --libs  wayland-client wayland-cursor xkbcommon cairo freetype2` -lm
