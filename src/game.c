@@ -271,7 +271,7 @@ resize_screens(int width, int height)
 static void
 loadPlayerTextures(void)
 {
-	for (int i = 0; i < game.numplayers; i++) {
+	for (int i = 0; i <= game.numplayers; i++) {
 		game.screens[i].cam_x = 0;
 		game.screens[i].cam_y = 0;
 	}
@@ -1327,8 +1327,6 @@ drw(void)
 			switch (game.menuFocus) {
 			case 0:
 				game.state = STATE_LEVEL_SELECT;
-				freePlayerTextures();
-				loadPlayerTextures();
 				break;
 			case 1:
 				if (game.numplayers >= MAX_PLAYERS-1)
@@ -1495,6 +1493,8 @@ handleKey(int sym)
 			break;
 		case KEY_SELECT:
 			game.state = STATE_PLAY;
+			freePlayerTextures();
+			loadPlayerTextures();
 			break;
 		case KEY_QUIT:
 			game.state = STATE_MENU;
