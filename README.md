@@ -8,19 +8,17 @@ A platformer game.
 
 - c11 C compiler
 - make
+- cairo
+- freetype2
 - scdoc (optional, for manpages)
 
 - sdl2 >= 2.0.22
-- sdl2_image
-- sdl2_ttf
 
 Alternative dependencies, if you want to use the native wayland instead of SDL
 (set TARGET to wayland in config.mk):
 
 - libwayland
 - xkbcommon
-- cairo
-- freetype2
 
 ## Portablility
 
@@ -34,13 +32,6 @@ systems
 ## Screenshots
 
 TBD
-
-## Files
-`src/` directory contains the source code
-
-`man/` contains the man page
-
-`data/` contains the assets
 
 ## Installation
 
@@ -76,6 +67,6 @@ CC0 for the images
 Also GPLv3 for the fonts in [data/fonts](data/fonts) which
 are taken from https://www.gnu.org/software/freefont/
 
-[MIT LICENSE.scfg](src/LICENSE.scfg) for the scfg source code (specifically
+[MIT LICENSE.scfg](src/LICENSE.scfg) for the scfg source code (the files
 src/scfg.c and src/scfg.h) which is taken from
 https://git.sr.ht/~emersion/libscfg
